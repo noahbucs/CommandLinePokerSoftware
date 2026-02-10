@@ -13,6 +13,7 @@ def create_game_state(num_players, starting_chips, small_blind):
         "deck": [],
         "current_bet": 0,
         "stage": "preflop",
+        "last_raiser": None,
         "small_blind": small_blind,
         "big_blind": small_blind * 2
     }

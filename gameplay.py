@@ -170,25 +170,25 @@ def check_fold_win(game_state):
     return None
 def betting_phase(game_state):
     print("\n--- Betting Phase ---")
+    
+    game_state["last_raiser"] = None
 
-    active_players = [
-        p for p,d in game_state["players"].items() 
-        if not d["folded"] and d["chips"] > 0
-    ]
     while True:
-        action_taken = 0
+        active_players = [
+            p for p, d in game_state["players"].items()
+            if not d["folded"] and d["chips"] > 0
+        ]
 
         for player in active_players:
             data = game_state["players"][player]
 
-            if data["folded"]:
+            # Skip if already matched the bet
+            if data["bet"] == game_state["current_bet"] > 0 and data["bet"] == game_state["current_bet"]:
                 continue
 
             to_call = game_state["current_bet"] - data["bet"]
 
             print(f"{player}'s turn. Chips: {data['chips']}, To Call: {to_call}, Pot: {game_state['pot']}")
-
-            to_call = game_state["current_bet"] - data["bet"]
 
             if to_call == 0:
                 action = input("Check (c), Bet (b), Fold (f)? ").lower()
@@ -202,47 +202,61 @@ def betting_phase(game_state):
                 winner = check_fold_win(game_state)
                 if winner:
                     return winner
-        
+
             elif action == 'c' and to_call > 0:
                 bet_amount = min(to_call, data["chips"])
                 data["chips"] -= bet_amount
                 data["bet"] += bet_amount
                 game_state["pot"] += bet_amount
                 print(f"{player} calls {bet_amount}.")
-        
+
             elif action == 'c' and to_call == 0:
                 print(f"{player} checks.")
 
-            elif action == 'b' or action == 'r':
+            elif action == 'b' and game_state["current_bet"] == 0:
                 amount = int(input("Bet amount: "))
-                total_bet = to_call + amount
-
-                if total_bet > data["chips"]:
-                    print("Not enough chips to bet that amount.")
+                if amount <= 0 or amount > data["chips"]:
+                    print("Invalid bet amount.")
                     continue
-            
-                data["chips"] -= total_bet
-                data["bet"] += total_bet
-                game_state["pot"] += total_bet
-                game_state["current_bet"] = data["bet"]
 
-                print(f"{player} bet {data['bet']}")
+                data["chips"] -= amount
+                data["bet"] += amount
+                game_state["pot"] += amount
+                game_state["current_bet"] = amount
+                game_state["last_raiser"] = player
+                print(f"{player} bets {amount}.")
+
+            elif action == 'r' and game_state["current_bet"] > 0:
+                amount = int(input("Raise amount: "))
+                if amount <= 0 or (to_call + amount) > data["chips"]:
+                    print("Invalid raise amount.")
+                    continue
+
+                total = to_call + amount
+                data["chips"] -= total
+                data["bet"] += total
+                game_state["pot"] += total
+                game_state["current_bet"] = data["bet"]
+                game_state["last_raiser"] = player
+                print(f"{player} raises to {data['bet']}.")
 
             else:
                 print("Invalid action. Try again.")
                 continue
 
-            action_taken += 1
+        # End betting round if everyone checked
+        if game_state["last_raiser"] is None:
+            break
 
+        # End betting round if all active players have matched the bet
         if all(
             game_state["players"][p]["bet"] == game_state["current_bet"]
             or game_state["players"][p]["folded"]
             for p in active_players
         ):
-           break
+            break
 
-        winner = check_fold_win(game_state)
-        if winner:
-            return winner
 
-        return None
+
+
+    return None 

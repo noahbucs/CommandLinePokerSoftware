@@ -37,12 +37,8 @@ def play_round(game_state):
 
     print("\nHands:")
     for player, data in game_state["players"].items():
-        if data["chips"] <= 0:
+        if data["chips"] >= 0:
             print(player, data["hand"])
-
-    #Preflop betting
-    if betting(game_state):
-        return
 
     for stage in constants.STAGES:
 
