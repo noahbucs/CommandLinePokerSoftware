@@ -15,7 +15,9 @@ def main():
     )
 
     while True:
+        dealer = game_state["player_order"][game_state["dealer_index"]]
         print(f"\n--- Hand {hand_number} ---")
+        print(f"Dealer: {dealer}")
 
         gameplay.reset_round(game_state)
         play_round(game_state)
@@ -35,12 +37,20 @@ def play_round(game_state):
     #Deal cards
     gameplay.deal_cards(game_state)
 
+    gameplay.post_blinds(game_state)
+
     print("\nHands:")
     for player, data in game_state["players"].items():
         if data["chips"] >= 0:
             print(player, data["hand"])
 
-    for stage in constants.STAGES:
+    if betting(game_state, reset=False):
+        return
+
+    for stage in constants.STAGES[1:]:
+        game_state["stage"] = stage
+
+        gameplay.reset_bets(game_state)
 
         if stage == "flop":
             gameplay.deal_flop(game_state)
@@ -59,11 +69,14 @@ def play_round(game_state):
 
     print("\nWinner(s):", winners)
 
-def betting(game_state):
-    gameplay.reset_bets(game_state)
+def betting(game_state, reset=True):
+    if reset:
+        gameplay.reset_bets(game_state)
+
     winner = gameplay.betting_phase(game_state)
     if winner:
         return winner
+
 
 def game_over(game_state):
     active = [

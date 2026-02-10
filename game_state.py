@@ -14,6 +14,8 @@ def create_game_state(num_players, starting_chips, small_blind):
         "current_bet": 0,
         "stage": "preflop",
         "last_raiser": None,
+        "dealer_index": 0,     # Player 1 starts as dealer
+        "player_order": [f"Player {i+1}" for i in range(num_players)],
         "small_blind": small_blind,
         "big_blind": small_blind * 2
     }
