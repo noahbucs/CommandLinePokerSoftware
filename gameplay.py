@@ -1,20 +1,36 @@
 import random
 from collections import Counter
-from constants import RANK_VALUES
+from constants import RANK_VALUES, SUITS, RANKS
 
 #Card Logic
 # randomizes the deck of cards
 def shuffle_deck(game_state):
+    game_state["deck"] = [
+        r + s for s in SUITS for r in RANKS
+    ]
     random.shuffle(game_state["deck"])
+
+def reset_round(game_state):
+    game_state["deck"] = [
+        r + s for s in SUITS for r in RANKS
+    ]
+    shuffle_deck(game_state)
+
+    game_state["community_cards"] = []
+    game_state["pot"] = 0
+    game_state["current_bet"] = 0
+
+    for data in game_state["players"].values():
+        data["hand"] = []
+        data["bet"] = 0
+        data["folded"] = False
 
 # deals two cards to each player
 def deal_cards(game_state):
     for _ in range(2):
-        for player in game_state["players"]:
-            game_state["players"][player]["hand"].append(
-                game_state["deck"].pop(0)
-            )
-
+        for player, data in game_state["players"].items():
+            if data["chips"] > 0:
+                data["hand"].append(game_state["deck"].pop(0))
         
 # deals the flop (three community cards)
 def deal_flop(game_state):
@@ -157,7 +173,7 @@ def betting_phase(game_state):
 
     active_players = [
         p for p,d in game_state["players"].items() 
-        if not d["folded"]
+        if not d["folded"] and d["chips"] > 0
     ]
     while True:
         action_taken = 0
@@ -224,3 +240,9 @@ def betting_phase(game_state):
             for p in active_players
         ):
            break
+
+        winner = check_fold_win(game_state)
+        if winner:
+            return winner
+
+        return None
