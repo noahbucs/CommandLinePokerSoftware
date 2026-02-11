@@ -24,6 +24,7 @@ def reset_round(game_state):
         data["hand"] = []
         data["bet"] = 0
         data["folded"] = False
+        data["all_in"] = False
 
 # deals two cards to each player
 def deal_cards(game_state):
@@ -242,10 +243,14 @@ def check_fold_win(game_state):
         return winner
 
     return None
+
 def betting_phase(game_state):
     print("\n--- Betting Phase ---")
-    
-    game_state["last_raiser"] = None
+
+    if game_state["stage"] != "preflop":
+        game_state["last_raiser"] = None
+
+    players_acted = set()
 
     while True:
         action_order = get_action_order(game_state, game_state["stage"])
@@ -253,19 +258,21 @@ def betting_phase(game_state):
         for player in action_order:
             data = game_state["players"][player]
 
-            # Skip if already matched the bet
-            if data["bet"] == game_state["current_bet"] > 0 and data["bet"] == game_state["current_bet"]:
+            # Skip folded players
+            if data["folded"] or data ["all_in"]:
                 continue
 
             to_call = game_state["current_bet"] - data["bet"]
 
             print(f"{player}'s turn. Chips: {data['chips']}, To Call: {to_call}, Pot: {game_state['pot']}")
 
+            # Determine available actions
             if to_call == 0:
                 action = input("Check (c), Bet (b), Fold (f)? ").lower()
             else:
                 action = input("Call (c), Raise (r), Fold (f)? ").lower()
 
+            #Fold
             if action == 'f':
                 data["folded"] = True
                 print(f"{player} folds.")
@@ -274,60 +281,119 @@ def betting_phase(game_state):
                 if winner:
                     return winner
 
+            #Call
             elif action == 'c' and to_call > 0:
                 bet_amount = min(to_call, data["chips"])
                 data["chips"] -= bet_amount
                 data["bet"] += bet_amount
                 game_state["pot"] += bet_amount
                 print(f"{player} calls {bet_amount}.")
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in")
 
+            #Checking
             elif action == 'c' and to_call == 0:
                 print(f"{player} checks.")
 
+            #Betting
             elif action == 'b' and game_state["current_bet"] == 0:
-                amount = int(input("Bet amount: "))
+                try:
+                    amount = int(input("Bet amount: "))
+                except ValueError:
+                    print("Invalid input.")
+                    continue
+
                 if amount <= 0 or amount > data["chips"]:
                     print("Invalid bet amount.")
                     continue
 
                 data["chips"] -= amount
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in")
                 data["bet"] += amount
                 game_state["pot"] += amount
                 game_state["current_bet"] = amount
+                game_state["min_raise"] = amount
                 game_state["last_raiser"] = player
+                players_acted = {player}
+
                 print(f"{player} bets {amount}.")
+                continue  # restart loop after bet
 
+            #Raise
             elif action == 'r' and game_state["current_bet"] > 0:
-                amount = int(input("Raise amount: "))
-                if amount <= 0 or (to_call + amount) > data["chips"]:
-                    print("Invalid raise amount.")
-                    continue
+                while True:
+                    try:
+                        raise_amount = int(input("Raise amount: "))
+                    except ValueError:
+                        print("Enter a valid number.")
+                        continue
 
-                total = to_call + amount
+                    if raise_amount < game_state["min_raise"]:
+                        print(f"Minimum raise is {game_state['min_raise']}.")
+                        continue
+
+                    if raise_amount + to_call > data["chips"]:
+                        print("Not enough chips.")
+                        continue
+
+                    break
+
+                total = to_call + raise_amount
                 data["chips"] -= total
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in")
                 data["bet"] += total
                 game_state["pot"] += total
                 game_state["current_bet"] = data["bet"]
+                game_state["min_raise"] = raise_amount
                 game_state["last_raiser"] = player
+                players_acted = {player}
+
                 print(f"{player} raises to {data['bet']}.")
+                continue  # restart loop after raise
 
             else:
-                print("Invalid action. Try again.")
+                print("Invalid action.")
                 continue
 
-        # End betting round if everyone checked
-        if game_state["last_raiser"] is None:
+            players_acted.add(player)
+
+        active_players = [
+            p for p in game_state["players"]
+            if not game_state["players"][p]["folded"]
+        ]
+
+        #All in stop
+        active_not_allin = [
+            p for p, d in game_state["players"].items()
+            if not d["folded"] and not d["all_in"]
+        ]
+
+        # If 0 or 1 players can still act, betting ends
+        if len(active_not_allin) <= 1:
             break
 
-        # End betting round if all active players have matched the bet
-        if all(
+        # All active players have matched the current bet
+        bets_equal = all(
             game_state["players"][p]["bet"] == game_state["current_bet"]
-            or game_state["players"][p]["folded"]
-            for p in action_order
+            for p in active_players
+        )
+
+        # If no raises happened and everyone acted once
+        # If no raises happened and eveyone acted once
+        if game_state["last_raiser"] is None and bets_equal:
+            break
+
+        # If there was a raise and action returned to raiser
+        if (
+            game_state["last_raiser"] is not None
+            and len(players_acted) == len(active_players)
+            and bets_equal
         ):
             break
 
-
-
-
-    return None 
+    return None

@@ -20,7 +20,11 @@ def main():
         print(f"Dealer: {dealer}")
 
         gameplay.reset_round(game_state)
+        gameplay.advance_dealer(game_state)
         play_round(game_state)
+        print("\nChip Counts:")
+        for p, d in game_state["players"].items():
+            print(p, d["chips"])
 
         over, active_players_remaining = game_over(game_state)
         if over:
@@ -46,6 +50,26 @@ def play_round(game_state):
 
     if betting(game_state, reset=False):
         return
+    
+    active_not_allin = [
+        p for p, d in game_state["players"].items()
+        if not d["folded"] and not d["all_in"]
+    ]
+
+    if len(active_not_allin) == 0:
+        # Everyone is all-in ? deal remaining streets
+        remaining_stages = constants.STAGES[
+            constants.STAGES.index(game_state["stage"]) + 1:
+        ]
+
+        for stage in remaining_stages:
+            game_state["stage"] = stage
+            if stage == "flop":
+                gameplay.deal_flop(game_state)
+            elif stage in ("turn", "river"):
+                gameplay.deal_turnandriver(game_state)
+
+        print("\nFinal Board:", game_state["community_cards"])
 
     for stage in constants.STAGES[1:]:
         game_state["stage"] = stage
@@ -66,6 +90,13 @@ def play_round(game_state):
     #Showdown
     evaluated = gameplay.evaluate_hands(game_state)
     winners = gameplay.determine_winner(evaluated)
+    split = game_state["pot"] // len(winners)
+
+    for w in winners:
+        game_state["players"][w]["chips"] += split
+
+    print(f"Each winner receives {split}")
+    game_state["pot"] = 0
 
     print("\nWinner(s):", winners)
 
