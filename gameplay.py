@@ -1,6 +1,7 @@
 import random
 from collections import Counter
 from constants import RANK_VALUES, SUITS, RANKS
+from itertools import combinations
 
 #Card Logic
 # randomizes the deck of cards
@@ -87,90 +88,86 @@ def get_action_order(game_state, stage):
 
     return order
 
-
-def is_straight(values):
-    values = sorted(set(values), reverse=True)
-
-    # Ace-low straight (A,2,3,4,5)
-    if values == [14, 5, 4, 3, 2]:
-        return True, 5
-
-    for i in range(len(values) - 4):
-        window = values[i:i+5]
-        if window[0] - window[4] == 4:
-            return True, window[0]
-
-    return False, None
-
 def rank_hand(cards):
+    best = None
+
+    # Check all 5-card combinations from 7 cards
+    for combo in combinations(cards, 5):
+        score = rank_five_card_hand(combo)
+        if best is None or score > best:
+            best = score
+
+    return best
+
+
+def rank_five_card_hand(cards):
     ranks = [card[:-1] for card in cards]
     suits = [card[-1] for card in cards]
 
-    values = [RANK_VALUES[r] for r in ranks]
-
+    values = sorted([RANK_VALUES[r] for r in ranks], reverse=True)
     rank_counts = Counter(values)
     suit_counts = Counter(suits)
 
     counts = sorted(rank_counts.values(), reverse=True)
 
-    # Flush
-    flush_suit = None
-    for suit, count in suit_counts.items():
-        if count >= 5:
-            flush_suit = suit
-            break
+    # Detect flush
+    is_flush = max(suit_counts.values()) == 5
 
-    # Straight
-    is_str, high_straight = is_straight(values)
+    # Detect straight
+    unique_vals = sorted(set(values), reverse=True)
 
-    # Straight flush
-    if flush_suit:
-        flush_cards = [
-            RANK_VALUES[c[0]] for c in cards if c[1] == flush_suit
-        ]
-        sf, high_sf = is_straight(flush_cards)
-        if sf:
-            return (8, high_sf)
+    # Wheel straight (A-2-3-4-5)
+    if unique_vals == [14, 5, 4, 3, 2]:
+        is_straight = True
+        straight_high = 5
+    else:
+        is_straight = len(unique_vals) == 5 and unique_vals[0] - unique_vals[-1] == 4
+        straight_high = unique_vals[0] if is_straight else None
+
+    # Straight Flush
+    if is_straight and is_flush:
+        return (8, straight_high)
 
     # Four of a kind
     if 4 in counts:
         four = max(v for v, c in rank_counts.items() if c == 4)
-        return (7, four)
+        kicker = max(v for v, c in rank_counts.items() if c == 1)
+        return (7, four, kicker)
 
     # Full house
-    if 3 in counts and 2 in counts:
+    if counts == [3, 2]:
         triple = max(v for v, c in rank_counts.items() if c == 3)
         pair = max(v for v, c in rank_counts.items() if c == 2)
         return (6, triple, pair)
 
     # Flush
-    if flush_suit:
-        high_flush = max(
-            RANK_VALUES[c[0]] for c in cards if c[1] == flush_suit
-        )
-        return (5, high_flush)
+    if is_flush:
+        return (5, *values)
 
     # Straight
-    if is_str:
-        return (4, high_straight)
+    if is_straight:
+        return (4, straight_high)
 
     # Three of a kind
     if 3 in counts:
         triple = max(v for v, c in rank_counts.items() if c == 3)
-        return (3, triple)
+        kickers = sorted([v for v, c in rank_counts.items() if c == 1], reverse=True)
+        return (3, triple, *kickers)
 
     # Two pair
-    if counts.count(2) >= 2:
+    if counts == [2, 2, 1]:
         pairs = sorted([v for v, c in rank_counts.items() if c == 2], reverse=True)
-        return (2, pairs[0], pairs[1])
+        kicker = max(v for v, c in rank_counts.items() if c == 1)
+        return (2, pairs[0], pairs[1], kicker)
 
     # One pair
-    if 2 in counts:
+    if counts == [2, 1, 1, 1]:
         pair = max(v for v, c in rank_counts.items() if c == 2)
-        return (1, pair)
-    
+        kickers = sorted([v for v, c in rank_counts.items() if c == 1], reverse=True)
+        return (1, pair, *kickers)
+
     # High card
-    return (0, max(values))
+    return (0, *values)
 
 def evaluate_hands(game_state):
     evaluated = {}
