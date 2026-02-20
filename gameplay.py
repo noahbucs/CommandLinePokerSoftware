@@ -1,6 +1,6 @@
 import random
 from collections import Counter
-from constants import RANK_VALUES, SUITS, RANKS
+from constants import RANK_VALUES, SUITS, RANKS , STAGES
 from itertools import combinations
 
 #Card Logic
@@ -17,9 +17,15 @@ def reset_round(game_state):
     ]
     shuffle_deck(game_state)
 
+    game_state["stage"] = "preflop"
     game_state["community_cards"] = []
     game_state["pot"] = 0
     game_state["current_bet"] = 0
+
+    for p in game_state["players"]:
+        game_state["players"][p]["bet"] = 0
+        game_state["players"][p]["folded"] = False
+        game_state["players"][p]["all_in"] = False  
 
     for data in game_state["players"].values():
         data["hand"] = []
@@ -87,6 +93,18 @@ def get_action_order(game_state, stage):
             order.append(player)
 
     return order
+
+def get_legal_actions(game_state, player):
+    data = game_state["players"][player]
+    to_call = game_state["current_bet"] - data["bet"]
+
+    if data["chips"] <= 0:
+        return []
+
+    if to_call == 0:
+        return ["check", "bet", "fold"]
+    else:
+        return ["call", "raise", "fold"]
 
 def rank_hand(cards):
     best = None
@@ -176,13 +194,36 @@ def evaluate_hands(game_state):
         evaluated[player] = rank_hand(full_hand)
     return evaluated
 
-def determine_winner(evaluated_hands):
-    best_rank = max(evaluated_hands.values())
-    winners = [
-        player for player, rank in evaluated_hands.items()
-        if rank == best_rank
-    ]
-    return winners
+def resolve_showdown(game_state):
+    players = game_state["players"]
+    side_pots = game_state.get("side_pots", [])
+
+    # Evaluate all hands once
+    hand_strengths = evaluate_hands(game_state)
+
+    # Resolve each pot independently
+    for pot in side_pots:
+        eligible = [
+            p for p in pot["eligible"]
+            if not players[p]["folded"]
+        ]
+
+        if not eligible:
+            continue
+
+        best = max(hand_strengths[p] for p in eligible)
+
+        winners = [
+            p for p in eligible
+            if hand_strengths[p] == best
+        ]
+
+        split_amount = pot["amount"] // len(winners)
+
+        for w in winners:
+            players[w]["chips"] += split_amount
+
+        print(f"Side pot {pot['amount']} won by {winners}")
 
 # Betting Logic
 def post_blinds(game_state):
@@ -241,6 +282,141 @@ def check_fold_win(game_state):
 
     return None
 
+def build_side_pots(game_state):
+    players = game_state["players"]
+
+    # Only players who put chips in
+    contributions = {
+        p: players[p]["bet"]
+        for p in players
+        if players[p]["bet"] > 0
+    }
+
+    side_pots = []
+
+    while contributions:
+        # Smallest contribution remaining
+        min_bet = min(contributions.values())
+
+        # Players eligible for this layer
+        eligible = list(contributions.keys())
+
+        pot_amount = min_bet * len(eligible)
+
+        side_pots.append({
+            "amount": pot_amount,
+            "eligible": eligible.copy()
+        })
+
+        # Subtract layer from each player
+        to_remove = []
+        for p in contributions:
+            contributions[p] -= min_bet
+            if contributions[p] == 0:
+                to_remove.append(p)
+
+        for p in to_remove:
+            del contributions[p]
+
+    game_state["side_pots"] = side_pots
+
+def all_players_all_in_or_folded(game_state):
+    active = [
+        p for p, d in game_state["players"].items()
+        if not d["folded"]
+    ]
+
+    not_all_in = [
+        p for p in active
+        if not game_state["players"][p]["all_in"]
+    ]
+
+    return len(not_all_in) <= 1
+
+def runout_and_showdown(game_state):
+    current_index = STAGES.index(game_state["stage"])
+    remaining = STAGES[current_index + 1:]
+
+    for stage in remaining:
+        game_state["stage"] = stage
+        if stage == "flop":
+            deal_flop(game_state)
+        else:
+            deal_turnandriver(game_state)
+
+    while len(game_state["community_cards"]) < 5:
+        game_state["community_cards"].append(game_state["deck"].pop())
+
+    print("\nFinal Board:", game_state["community_cards"])
+
+    build_side_pots(game_state)
+    resolve_showdown(game_state)
+
+    cleanup_after_hand(game_state)
+
+def cleanup_after_hand(game_state):
+    game_state["pot"] = 0
+    for p in game_state["players"]:
+        game_state["players"][p]["bet"] = 0
+
+def play_round(game_state):
+    print("Shuffled Deck:")
+    print(game_state["deck"])
+
+    deal_cards(game_state)
+    post_blinds(game_state)
+
+    print("\nHands:")
+    for player, data in game_state["players"].items():
+        print(player, data["hand"])
+
+    #preflop
+    result = betting_phase(game_state)
+    if result == "fold_win":
+        return  # fold win
+    if result == "all_in_runout":
+        runout_and_showdown(game_state)
+        return
+
+    # Check if betting is permanently over (all-in situation)
+    if all_players_all_in_or_folded(game_state):
+        runout_and_showdown(game_state)
+        return
+
+    #flop,turn, river
+    for stage in ["flop", "turn", "river"]:
+        game_state["stage"] = stage
+        reset_bets(game_state)
+
+        if stage == "flop":
+            deal_flop(game_state)
+        else:
+            deal_turnandriver(game_state)
+
+        print("\nCommunity Cards:", game_state["community_cards"])
+
+        result = betting_phase(game_state)
+        if result:
+            return  # fold win
+
+        if all_players_all_in_or_folded(game_state):
+            runout_and_showdown(game_state)
+            return
+
+    #Showdown
+    build_side_pots(game_state)
+    resolve_showdown(game_state)
+
+    cleanup_after_hand(game_state)
+
+def betting(game_state, reset=True):
+    if reset:
+        reset_bets(game_state)
+
+    winner = betting_phase(game_state)
+    if winner:
+        return winner
+
 def betting_phase(game_state):
     print("\n--- Betting Phase ---")
 
@@ -255,137 +431,151 @@ def betting_phase(game_state):
         for player in action_order:
             data = game_state["players"][player]
 
-            # Skip folded players
-            if data["folded"] or data ["all_in"]:
+            if data["folded"] or data["all_in"]:
                 continue
 
             to_call = game_state["current_bet"] - data["bet"]
+            chips = data["chips"]
 
-            print(f"{player}'s turn. Chips: {data['chips']}, To Call: {to_call}, Pot: {game_state['pot']}")
+            # DISPLAY
+            if game_state.get("verbose", True):
+                print(f"\n{player}'s turn")
+                print(f"Stage: {game_state['stage']}")
+                print(f"Community Cards: {game_state['community_cards']}")
+                print(f"Your Hand: {data['hand']}")
+                print(f"Chips: {chips}")
+                print(f"Current Bet: {game_state['current_bet']}")
+                print(f"Your Bet: {data['bet']}")
+                print(f"To Call: {to_call}")
+                print(f"Pot: {game_state['pot']}")
 
-            # Determine available actions
-            if to_call == 0:
-                action = input("Check (c), Bet (b), Fold (f)? ").lower()
-            else:
-                action = input("Call (c), Raise (r), Fold (f)? ").lower()
+            legal_actions = get_legal_actions(game_state, player)
+            if not legal_actions:
+                continue
+
+            strategy = data["strategy"]
+            action, amount = strategy(game_state, player, legal_actions)
 
             #Fold
-            if action == 'f':
+            if action == "fold":
                 data["folded"] = True
                 print(f"{player} folds.")
 
                 winner = check_fold_win(game_state)
                 if winner:
-                    return winner
+                    return "fold_win"
+
+            #Check
+            elif action == "check":
+                print(f"{player} checks.")
 
             #Call
-            elif action == 'c' and to_call > 0:
-                bet_amount = min(to_call, data["chips"])
+            elif action == "call":
+                call_amount = min(to_call, chips)
+
+                data["chips"] -= call_amount
+                data["bet"] += call_amount
+                game_state["pot"] += call_amount
+
+                print(f"{player} calls {call_amount}.")
+
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in.")
+
+            #All-in
+            elif action == "all-in":
+                all_in_amount = chips
+
+                data["bet"] += all_in_amount
+                game_state["pot"] += all_in_amount
+                data["chips"] = 0
+                data["all_in"] = True
+
+                print(f"{player} goes all-in for {all_in_amount}.")
+
+                if data["bet"] > game_state["current_bet"]:
+                    raise_size = data["bet"] - game_state["current_bet"]
+                    game_state["min_raise"] = raise_size
+                    game_state["current_bet"] = data["bet"]
+                    game_state["last_raiser"] = player
+                    players_acted = {player}
+                    continue
+
+            #Bet
+            elif action == "bet":
+                bet_amount = min(amount, chips)
+
                 data["chips"] -= bet_amount
                 data["bet"] += bet_amount
                 game_state["pot"] += bet_amount
-                print(f"{player} calls {bet_amount}.")
-                if data["chips"] == 0:
-                    data["all_in"] = True
-                    print(f"{player} goes all-in")
 
-            #Checking
-            elif action == 'c' and to_call == 0:
-                print(f"{player} checks.")
-
-            #Betting
-            elif action == 'b' and game_state["current_bet"] == 0:
-                try:
-                    amount = int(input("Bet amount: "))
-                except ValueError:
-                    print("Invalid input.")
-                    continue
-
-                if amount <= 0 or amount > data["chips"]:
-                    print("Invalid bet amount.")
-                    continue
-
-                data["chips"] -= amount
-                if data["chips"] == 0:
-                    data["all_in"] = True
-                    print(f"{player} goes all-in")
-                data["bet"] += amount
-                game_state["pot"] += amount
-                game_state["current_bet"] = amount
-                game_state["min_raise"] = amount
+                game_state["current_bet"] = data["bet"]
+                game_state["min_raise"] = bet_amount
                 game_state["last_raiser"] = player
                 players_acted = {player}
 
-                print(f"{player} bets {amount}.")
-                continue  # restart loop after bet
+                print(f"{player} bets {bet_amount}.")
+
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in.")
+
+                continue
 
             #Raise
-            elif action == 'r' and game_state["current_bet"] > 0:
-                while True:
-                    try:
-                        raise_amount = int(input("Raise amount: "))
-                    except ValueError:
-                        print("Enter a valid number.")
-                        continue
+            elif action == "raise":
+                raise_increment = amount
+                if raise_increment < game_state["min_raise"]:
+                    continue
 
-                    if raise_amount < game_state["min_raise"]:
-                        print(f"Minimum raise is {game_state['min_raise']}.")
-                        continue
+                total_needed = to_call + raise_increment
+                total_needed = min(total_needed, chips)
 
-                    if raise_amount + to_call > data["chips"]:
-                        print("Not enough chips.")
-                        continue
-
-                    break
-
-                total = to_call + raise_amount
-                data["chips"] -= total
-                if data["chips"] == 0:
-                    data["all_in"] = True
-                    print(f"{player} goes all-in")
-                data["bet"] += total
-                game_state["pot"] += total
-                game_state["current_bet"] = data["bet"]
-                game_state["min_raise"] = raise_amount
-                game_state["last_raiser"] = player
-                players_acted = {player}
+                data["chips"] -= total_needed
+                data["bet"] += total_needed
+                game_state["pot"] += total_needed
 
                 print(f"{player} raises to {data['bet']}.")
-                continue  # restart loop after raise
 
-            else:
-                print("Invalid action.")
+                if data["bet"] > game_state["current_bet"]:
+                    raise_size = data["bet"] - game_state["current_bet"]
+                    game_state["min_raise"] = raise_size
+                    game_state["current_bet"] = data["bet"]
+                    game_state["last_raiser"] = player
+                    players_acted = {player}
+
+                if data["chips"] == 0:
+                    data["all_in"] = True
+                    print(f"{player} goes all-in.")
+
                 continue
 
             players_acted.add(player)
+
+        #check if we can end betting round
 
         active_players = [
             p for p in game_state["players"]
             if not game_state["players"][p]["folded"]
         ]
 
-        #All in stop
         active_not_allin = [
-            p for p, d in game_state["players"].items()
-            if not d["folded"] and not d["all_in"]
+            p for p in active_players
+            if not game_state["players"][p]["all_in"]
         ]
 
-        # If 0 or 1 players can still act, betting ends
         if len(active_not_allin) <= 1:
-            break
+            return "all_in_runout"
 
-        # All active players have matched the current bet
         bets_equal = all(
             game_state["players"][p]["bet"] == game_state["current_bet"]
             for p in active_players
         )
 
-        # If no raises happened and everyone acted once
-        # If no raises happened and eveyone acted once
         if game_state["last_raiser"] is None and bets_equal:
             break
 
-        # If there was a raise and action returned to raiser
         if (
             game_state["last_raiser"] is not None
             and len(players_acted) == len(active_players)
