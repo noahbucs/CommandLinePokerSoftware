@@ -9,7 +9,8 @@ def create_game_state(num_players, starting_chips, small_blind):
                 "chips": starting_chips,
                 "bet": 0,
                 "folded": False,
-                "all_in": False
+                "all_in": False,
+                "strategy": None
             } for i in range(num_players)
         },
         # Initialize game data
@@ -23,5 +24,6 @@ def create_game_state(num_players, starting_chips, small_blind):
         "player_order": [f"Player {i+1}" for i in range(num_players)],
         "small_blind": small_blind,
         "big_blind": small_blind * 2,
-        "min_raise": small_blind * 2
+        "min_raise": small_blind * 2,
+        "verbose": True,
     }
