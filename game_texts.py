@@ -37,25 +37,3 @@ Rules:
 Have fun!
 """
 
-# Betting prompts
-PROMPT_CHECK_BET_FOLD = "Check (c), Bet (b), Fold (f)? "
-PROMPT_CALL_RAISE_FOLD = "Call (c), Raise (r), Fold (f)? "
-PROMPT_BET_AMOUNT = "Bet amount: "
-PROMPT_RAISE_AMOUNT = "Raise amount: "
-INVALID_ACTION = "Invalid action. Try again."
-INVALID_BET = "Invalid bet amount."
-INVALID_RAISE = "Invalid raise amount."
-
-# Game messages
-MSG_COMMUNITY_CARDS = "Community Cards:"
-MSG_WINNER = "Winner(s):"
-MSG_PLAYER_FOLDS = "{} folds."
-MSG_PLAYER_WINS_FOLD = "{} wins the pot ({}) by everyone folding."
-MSG_GAME_OVER = "Game Over! Winner: {}"
-
-#Messages for debugging
-MSG_SHUFFLED_DECK = "Shuffled Deck:"
-MSG_HANDS = "Hands:"
-
-# Chips / betting info
-MSG_PLAYER_TURN = "{}'s turn. Chips: {}, To Call: {}, Pot: {}"
