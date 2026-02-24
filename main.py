@@ -49,7 +49,6 @@ def main(mode):
     
         hand_number += 1
 
-
 def game_over(game_state):
     active = [
         p for p, d in game_state["players"].items()
@@ -59,9 +58,17 @@ def game_over(game_state):
 
 
 if __name__ == "__main__":
-    mode = menu.show_main_menu()
+    while True:
+        mode = menu.show_main_menu()
 
-    if mode is None:
-        exit()
+        if mode is None:
+            break
 
-    main(mode)
+        main(mode)
+
+        again = input("\nPlay again? (y/n): ").strip().lower()
+        while again not in ["y", "n"]:
+            again = input("Please enter y or n: ").strip().lower()
+            if again != "y":
+                print("Thanks for playing!")
+                break

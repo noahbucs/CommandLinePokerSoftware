@@ -1,16 +1,18 @@
 import random
+import time
 from collections import Counter
 from constants import RANK_VALUES, SUITS, RANKS , STAGES
 from itertools import combinations
 
 #Card Logic
-# randomizes the deck of cards
+#Randomizes the deck of cards
 def shuffle_deck(game_state):
     game_state["deck"] = [
         r + s for s in SUITS for r in RANKS
     ]
     random.shuffle(game_state["deck"])
 
+#resets everything back to default
 def reset_round(game_state):
     game_state["deck"] = [
         r + s for s in SUITS for r in RANKS
@@ -21,6 +23,7 @@ def reset_round(game_state):
     game_state["community_cards"] = []
     game_state["pot"] = 0
     game_state["current_bet"] = 0
+    game_state["min_raise"] = game_state["big_blind"]
 
     for p in game_state["players"]:
         game_state["players"][p]["bet"] = 0
@@ -49,12 +52,15 @@ def deal_flop(game_state):
          )
 
  # deals the turn or river (one community card)
+
+#deals the turn or river (one community card)
 def deal_turnandriver(game_state):
     game_state["deck"].pop(0)
     game_state["community_cards"].append(
         game_state["deck"].pop(0)
     )
 
+#Changes the dealer to the next player
 def advance_dealer(game_state):
     players = game_state["player_order"]
     num_players = len(players)
@@ -65,6 +71,7 @@ def advance_dealer(game_state):
         if game_state["players"][dealer]["chips"] > 0:
             break
 
+# Gets the order of the players
 def get_action_order(game_state, stage):
     players = game_state["player_order"]
     active_players = [
@@ -94,6 +101,7 @@ def get_action_order(game_state, stage):
 
     return order
 
+#Helper to check valid actions
 def get_legal_actions(game_state, player):
     data = game_state["players"][player]
     to_call = game_state["current_bet"] - data["bet"]
@@ -106,6 +114,7 @@ def get_legal_actions(game_state, player):
     else:
         return ["call", "raise", "fold"]
 
+#Gives each hand a score
 def rank_hand(cards):
     best = None
 
@@ -117,7 +126,7 @@ def rank_hand(cards):
 
     return best
 
-
+#Ranks hand based off best 5 cards
 def rank_five_card_hand(cards):
     ranks = [card[:-1] for card in cards]
     suits = [card[-1] for card in cards]
@@ -260,7 +269,6 @@ def post_blinds(game_state):
     print(f"{sb_player} posts small blind ({sb_amount})")
     print(f"{bb_player} posts big blind ({bb_amount})")
 
-
 def reset_bets(game_state):
     game_state["current_bet"] = 0
     for player in game_state["players"].values():
@@ -360,8 +368,8 @@ def cleanup_after_hand(game_state):
         game_state["players"][p]["bet"] = 0
 
 def play_round(game_state):
-    print("Shuffled Deck:")
-    print(game_state["deck"])
+    #print("Shuffled Deck:")
+    #print(game_state["deck"])
 
     deal_cards(game_state)
     post_blinds(game_state)
@@ -439,6 +447,7 @@ def betting_phase(game_state):
 
             # DISPLAY
             if game_state.get("verbose", True):
+                #time.sleep(0.75)
                 print(f"\n{player}'s turn")
                 print(f"Stage: {game_state['stage']}")
                 print(f"Community Cards: {game_state['community_cards']}")
@@ -448,6 +457,7 @@ def betting_phase(game_state):
                 print(f"Your Bet: {data['bet']}")
                 print(f"To Call: {to_call}")
                 print(f"Pot: {game_state['pot']}")
+                #time.sleep(0.5)
 
             legal_actions = get_legal_actions(game_state, player)
             if not legal_actions:

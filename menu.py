@@ -1,6 +1,5 @@
 import game_texts
 
-
 def show_main_menu():
     while True:
         print("\n" + "=" * 40)
@@ -15,10 +14,9 @@ def show_main_menu():
         elif choice == "2":
             print(game_texts.RULES_TEXT)
         elif choice == "3":
-            print("Goodbye!")
             return None
         else:
-            print("Invalid selection. Try again.")
+            print(game_texts.INVALID)
 
 
 def choose_game_mode():
@@ -31,4 +29,4 @@ def choose_game_mode():
         if choice in ["1", "2", "3"]:
             return choice
         else:
-            print("Invalid selection.")
+            print(game_texts.INVALID)

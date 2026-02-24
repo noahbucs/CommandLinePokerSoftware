@@ -37,3 +37,4 @@ Rules:
 Have fun!
 """
 
+INVALID = "Invalid input. Please try again."

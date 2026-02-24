@@ -1,4 +1,3 @@
-
 # Creates a default state for a poker game
 def create_game_state(num_players, starting_chips, small_blind):
     return {
