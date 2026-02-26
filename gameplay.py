@@ -374,9 +374,9 @@ def play_round(game_state):
     deal_cards(game_state)
     post_blinds(game_state)
 
-    print("\nHands:")
-    for player, data in game_state["players"].items():
-        print(player, data["hand"])
+    #print("\nHands:")
+    #for player, data in game_state["players"].items():
+        #print(player, data["hand"])
 
     #preflop
     result = betting_phase(game_state)
@@ -588,7 +588,7 @@ def betting_phase(game_state):
 
         if (
             game_state["last_raiser"] is not None
-            and len(players_acted) == len(active_players)
+            and len(players_acted) == len(active_not_allin)
             and bets_equal
         ):
             break
