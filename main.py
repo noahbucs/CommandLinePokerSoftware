@@ -27,8 +27,8 @@ def main(mode):
         game_state["players"][players[1]]["strategy"] = strategies.monte_carlo_bot_strategy
 
     elif mode == "3":  # Computer vs Computer
-        game_state["players"][players[0]]["strategy"] = strategies.monte_carlo_bot_strategy
-        game_state["players"][players[1]]["strategy"] = strategies.random_bot_strategy
+        game_state["players"][players[0]]["strategy"] = strategies.random_bot_strategy
+        game_state["players"][players[1]]["strategy"] = strategies.monte_carlo_bot_strategy
 
     while True:
         dealer = game_state["player_order"][game_state["dealer_index"]]

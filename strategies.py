@@ -44,7 +44,7 @@ def random_bot_strategy(game_state, player, legal_actions):
 import random
 
 def estimate_equity(game_state, player, simulations=500):
-
+   
     hero_hand = game_state["players"][player]["hand"][:]
     community = game_state["community_cards"][:]
     full_deck = game_state["deck"][:]
@@ -103,7 +103,9 @@ def monte_carlo_bot_strategy(game_state, player, legal_actions):
 
     equity = estimate_equity(game_state, player, simulations=500)
 
-    to_call = game_state["players"][player]["bet"]
+    player_bet = game_state["players"][player]["bet"]
+    current_bet = game_state["current_bet"]
+    to_call = max(0, current_bet - player_bet)
     pot = game_state["pot"]
     chips = game_state["players"][player]["chips"]
 
@@ -112,12 +114,16 @@ def monte_carlo_bot_strategy(game_state, player, legal_actions):
     else:
         pot_odds = 0
 
-    if equity > 0.65 and "raise" in legal_actions:
-        min_raise = game_state["min_raise"]
-        amount = min(min_raise, chips)
-        return "raise", amount
+    if equity > 0.65:
+        if "raise" in legal_actions:
+            min_raise = game_state["min_raise"]
+           
+            raise_amount = max(min_raise, min(pot // 2, chips))
+            return "raise", raise_amount
+        elif "bet" in legal_actions:
+            bet_amount = max(game_state["min_raise"], min(pot // 2, chips))
+            return "bet", bet_amount
 
-    # Fold if losing long-term
     if "call" in legal_actions:
         if equity > pot_odds:
             return "call", None
@@ -125,7 +131,9 @@ def monte_carlo_bot_strategy(game_state, player, legal_actions):
             return "fold", None
 
     if "check" in legal_actions:
+        if equity > 0.55 and "bet" in legal_actions:
+            bet_amount = max(game_state["min_raise"], min(pot // 3, chips))
+            return "bet", bet_amount
         return "check", None
 
     return "fold", None
-    
