@@ -101,7 +101,10 @@ def estimate_equity(game_state, player, simulations=500):
 
 def monte_carlo_bot_strategy(game_state, player, legal_actions):
 
-    equity = estimate_equity(game_state, player, simulations=500)
+    if game_state["stage"] == "pre-flop":
+        equity = estimate_equity(game_state, player, simulations=150)
+    else:
+        equity = estimate_equity(game_state, player, simulations=500)
 
     player_bet = game_state["players"][player]["bet"]
     current_bet = game_state["current_bet"]
