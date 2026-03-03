@@ -1,6 +1,7 @@
+from stats import StatsManager
 # Creates a default state for a poker game
 def create_game_state(num_players, starting_chips, small_blind):
-    return {
+    game_state = {
         # Initialize player data
         "players": {
             f"Player {i+1}": {
@@ -26,3 +27,10 @@ def create_game_state(num_players, starting_chips, small_blind):
         "min_raise": small_blind * 2,
         "verbose": True,
     }
+
+    # Initialize stats manager
+    game_state["stats"] = StatsManager(
+        players=game_state["player_order"]
+        )
+
+    return game_state

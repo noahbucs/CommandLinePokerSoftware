@@ -35,6 +35,7 @@ def reset_round(game_state):
         data["bet"] = 0
         data["folded"] = False
         data["all_in"] = False
+        data["total_contributed"] = 0
 
 # deals two cards to each player
 def deal_cards(game_state):
@@ -104,7 +105,7 @@ def get_action_order(game_state, stage):
 #Helper to check valid actions
 def get_legal_actions(game_state, player):
     data = game_state["players"][player]
-    to_call = game_state["current_bet"] - data["bet"]
+    to_call = max(0, game_state["current_bet"] - data["bet"])
 
     if data["chips"] <= 0:
         return []
@@ -206,6 +207,7 @@ def evaluate_hands(game_state):
 def resolve_showdown(game_state):
     players = game_state["players"]
     side_pots = game_state.get("side_pots", [])
+    stats = game_state["stats"]
 
     # Evaluate all hands once
     hand_strengths = evaluate_hands(game_state)
@@ -231,6 +233,11 @@ def resolve_showdown(game_state):
 
         for w in winners:
             players[w]["chips"] += split_amount
+            game_state["stats"].record_win(w, split_amount)
+
+        for p in eligible:
+            won = p in winners
+            stats.record_showdown(p, won)
 
         print(f"Side pot {pot['amount']} won by {winners}")
 
@@ -253,15 +260,24 @@ def post_blinds(game_state):
 
     sb_amount = min(game_state["small_blind"], game_state["players"][sb_player]["chips"])
     bb_amount = min(game_state["big_blind"], game_state["players"][bb_player]["chips"])
-
+    
+         
     # Post blinds
-    game_state["players"][sb_player]["chips"] -= sb_amount
-    game_state["players"][sb_player]["bet"] += sb_amount
-    game_state["pot"] += sb_amount
+    for p, amount in [(sb_player, sb_amount), (bb_player, bb_amount)]:
+        game_state["players"][p]["chips"] -= amount
+        game_state["players"][p]["bet"] += amount
+        game_state["pot"] += amount
+        game_state["stats"].record_action(p, "blind", "preflop")
+        if game_state["players"][p]["chips"] == 0:
+            game_state["players"][p]["all_in"] = True
 
-    game_state["players"][bb_player]["chips"] -= bb_amount
-    game_state["players"][bb_player]["bet"] += bb_amount
-    game_state["pot"] += bb_amount
+    if sb_amount > bb_amount:
+        excess = sb_amount - bb_amount
+        game_state["players"][sb_player]["chips"] += excess
+        game_state["players"][sb_player]["bet"] -= excess
+        game_state["pot"] -= excess
+        if game_state["players"][sb_player]["all_in"]:
+            game_state["players"][sb_player]["all_in"] = False
 
     game_state["current_bet"] = bb_amount
     game_state["last_raiser"] = bb_player
@@ -272,6 +288,8 @@ def post_blinds(game_state):
 def reset_bets(game_state):
     game_state["current_bet"] = 0
     for player in game_state["players"].values():
+        # Carry forward what was bet this street into the running total
+        player["total_contributed"] = player.get("total_contributed", 0) + player["bet"]
         player["bet"] = 0
 
 def check_fold_win(game_state):
@@ -282,22 +300,21 @@ def check_fold_win(game_state):
 
     if len(active_players) == 1:
         winner = active_players[0]
-        game_state["players"][winner]["chips"] += game_state["pot"]
-
-        print(f"\n{winner} wins the pot ({game_state['pot']}) by everyone folding.")
+        pot = game_state["pot"]
+        game_state["players"][winner]["chips"] += pot
+        print(f"\n{winner} wins the pot ({pot}) by everyone folding.")
         game_state["pot"] = 0
-        return winner
+        return winner, pot
 
-    return None
+    return None, 0
 
 def build_side_pots(game_state):
     players = game_state["players"]
 
-    # Only players who put chips in
     contributions = {
-        p: players[p]["bet"]
+        p: players[p].get("total_contributed", 0) + players[p]["bet"]
         for p in players
-        if players[p]["bet"] > 0
+        if players[p].get("total_contributed", 0) + players[p]["bet"] > 0
     }
 
     side_pots = []
@@ -371,6 +388,8 @@ def play_round(game_state):
     #print("Shuffled Deck:")
     #print(game_state["deck"])
 
+    game_state["stats"].record_new_hand()
+
     deal_cards(game_state)
     post_blinds(game_state)
 
@@ -404,8 +423,11 @@ def play_round(game_state):
         print("\nCommunity Cards:", game_state["community_cards"])
 
         result = betting_phase(game_state)
-        if result:
-            return  # fold win
+        if result == "fold_win":
+            return
+        if result == "all_in_runout":
+            runout_and_showdown(game_state)
+            return
 
         if all_players_all_in_or_folded(game_state):
             runout_and_showdown(game_state)
@@ -428,13 +450,28 @@ def betting(game_state, reset=True):
 def betting_phase(game_state):
     print("\n--- Betting Phase ---")
 
-    if game_state["stage"] != "preflop":
-        game_state["last_raiser"] = None
+    stats = game_state["stats"]
 
-    players_acted = set()
+    if game_state["stage"] == "preflop":
+        players = game_state["player_order"]
+        dealer = game_state["dealer_index"]
+        active_players_list = [
+            p for p in players if game_state["players"][p]["chips"] > 0 and not game_state["players"][p]["folded"]
+        ]
+        if len(active_players_list) == 2:
+            bb_player = players[(dealer + 1) % len(players)]
+        else:
+            bb_player = players[(dealer + 2) % len(players)]
+        players_acted = {bb_player}
+        last_raiser = game_state.get("last_raiser")
+    else:
+        game_state["last_raiser"] = None
+        players_acted = set()
+        last_raiser = None
 
     while True:
         action_order = get_action_order(game_state, game_state["stage"])
+        acted_this_pass = False
 
         for player in action_order:
             data = game_state["players"][player]
@@ -442,12 +479,15 @@ def betting_phase(game_state):
             if data["folded"] or data["all_in"]:
                 continue
 
-            to_call = game_state["current_bet"] - data["bet"]
+            if player in players_acted:
+                to_call_check = game_state["current_bet"] - data["bet"]
+                if to_call_check == 0:
+                    continue
+
+            to_call = max(0, game_state["current_bet"] - data["bet"])
             chips = data["chips"]
 
-            # DISPLAY
             if game_state.get("verbose", True):
-                #time.sleep(0.75)
                 print(f"\n{player}'s turn")
                 print(f"Stage: {game_state['stage']}")
                 print(f"Community Cards: {game_state['community_cards']}")
@@ -457,7 +497,6 @@ def betting_phase(game_state):
                 print(f"Your Bet: {data['bet']}")
                 print(f"To Call: {to_call}")
                 print(f"Pot: {game_state['pot']}")
-                #time.sleep(0.5)
 
             legal_actions = get_legal_actions(game_state, player)
             if not legal_actions:
@@ -466,18 +505,26 @@ def betting_phase(game_state):
             strategy = data["strategy"]
             action, amount = strategy(game_state, player, legal_actions)
 
+            acted_this_pass = True
+
             #Fold
             if action == "fold":
                 data["folded"] = True
                 print(f"{player} folds.")
+                stats.record_action(player, "fold", game_state["stage"])
 
-                winner = check_fold_win(game_state)
+                winner, pot = check_fold_win(game_state)
                 if winner:
+                    stats.record_win(winner, pot)
                     return "fold_win"
+
+                players_acted.add(player)
 
             #Check
             elif action == "check":
                 print(f"{player} checks.")
+                stats.record_action(player, "check", game_state["stage"])
+                players_acted.add(player)
 
             #Call
             elif action == "call":
@@ -488,6 +535,8 @@ def betting_phase(game_state):
                 game_state["pot"] += call_amount
 
                 print(f"{player} calls {call_amount}.")
+                stats.record_action(player, "call", game_state["stage"])
+                players_acted.add(player)
 
                 if data["chips"] == 0:
                     data["all_in"] = True
@@ -503,6 +552,7 @@ def betting_phase(game_state):
                 data["all_in"] = True
 
                 print(f"{player} goes all-in for {all_in_amount}.")
+                stats.record_action(player, "all-in", game_state["stage"])
 
                 if data["bet"] > game_state["current_bet"]:
                     raise_size = data["bet"] - game_state["current_bet"]
@@ -510,7 +560,6 @@ def betting_phase(game_state):
                     game_state["current_bet"] = data["bet"]
                     game_state["last_raiser"] = player
                     players_acted = {player}
-                    continue
 
             #Bet
             elif action == "bet":
@@ -526,17 +575,27 @@ def betting_phase(game_state):
                 players_acted = {player}
 
                 print(f"{player} bets {bet_amount}.")
+                stats.record_action(player, "bet", game_state["stage"])
 
                 if data["chips"] == 0:
                     data["all_in"] = True
                     print(f"{player} goes all-in.")
 
-                continue
-
             #Raise
             elif action == "raise":
                 raise_increment = amount
+
                 if raise_increment < game_state["min_raise"]:
+                    call_amount = min(to_call, chips)
+                    data["chips"] -= call_amount
+                    data["bet"] += call_amount
+                    game_state["pot"] += call_amount
+                    print(f"{player} calls {call_amount}.")
+                    stats.record_action(player, "call", game_state["stage"])
+                    players_acted.add(player)
+                    if data["chips"] == 0:
+                        data["all_in"] = True
+                        print(f"{player} goes all-in.")
                     continue
 
                 total_needed = to_call + raise_increment
@@ -547,6 +606,7 @@ def betting_phase(game_state):
                 game_state["pot"] += total_needed
 
                 print(f"{player} raises to {data['bet']}.")
+                stats.record_action(player, "raise", game_state["stage"])
 
                 if data["bet"] > game_state["current_bet"]:
                     raise_size = data["bet"] - game_state["current_bet"]
@@ -558,12 +618,6 @@ def betting_phase(game_state):
                 if data["chips"] == 0:
                     data["all_in"] = True
                     print(f"{player} goes all-in.")
-
-                continue
-
-            players_acted.add(player)
-
-        #check if we can end betting round
 
         active_players = [
             p for p in game_state["players"]
@@ -580,17 +634,13 @@ def betting_phase(game_state):
 
         bets_equal = all(
             game_state["players"][p]["bet"] == game_state["current_bet"]
-            for p in active_players
+            for p in active_not_allin
         )
 
-        if game_state["last_raiser"] is None and bets_equal:
+        if bets_equal and all(p in players_acted for p in active_not_allin):
             break
 
-        if (
-            game_state["last_raiser"] is not None
-            and len(players_acted) == len(active_not_allin)
-            and bets_equal
-        ):
+        if not acted_this_pass:
             break
 
     return None

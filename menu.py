@@ -1,5 +1,7 @@
 import game_texts
+import stats
 
+#Display main menu and handle user input
 def show_main_menu():
     while True:
         print("\n" + "=" * 40)
@@ -12,12 +14,13 @@ def show_main_menu():
         if choice == "1":
             return choose_game_mode()
         elif choice == "2":
-            print(game_texts.RULES_TEXT)
+            stats.view_stats_menu()
         elif choice == "3":
+            print(game_texts.RULES_TEXT)
+        elif choice == "4":
             return None
         else:
             print(game_texts.INVALID)
-
 
 def choose_game_mode():
     while True:

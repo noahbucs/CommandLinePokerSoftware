@@ -38,6 +38,10 @@ def main(mode):
         gameplay.reset_round(game_state)
         gameplay.advance_dealer(game_state)
         gameplay.play_round(game_state)
+
+
+        game_state["stats"].flush_hand()
+
         print("\nChip Counts:")
         for p, d in game_state["players"].items():
             print(p, d["chips"])
@@ -45,8 +49,9 @@ def main(mode):
         over, active_players_remaining = game_over(game_state)
         if over:
             print(f"\nGame Over! Winner: {active_players_remaining[0]}")
+            game_state["stats"].print_stats()
             break
-    
+
         hand_number += 1
 
 def game_over(game_state):
