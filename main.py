@@ -3,32 +3,44 @@ import constants
 from game_state import create_game_state
 import strategies
 import menu
+import game_texts
 
 def main(mode):
     #Create game state
-    num_players = 2
+    num_players = None
     starting_chips = 1000
     hand_number = 1
+
+    while num_players is None:
+        num_players = input(game_texts.PLAYER_PROMPT)
+        if num_players.isdigit() and 2 <= int(num_players) <= 8:
+            num_players = int(num_players)
+        else:
+            print(game_texts.INVALID)
+            num_players = None
 
     game_state = create_game_state(
         num_players=num_players,
         starting_chips=starting_chips,
         small_blind=constants.STARTINGBLIND
     )
-
+    
     players = list(game_state["players"].keys())
 
     if mode == "1":  # Player vs Player
-        game_state["players"][players[0]]["strategy"] = strategies.human_strategy
-        game_state["players"][players[1]]["strategy"] = strategies.human_strategy
+        for p in players:
+            game_state["players"][p]["strategy"] = strategies.human_strategy
 
     elif mode == "2":  # Player vs Computer
-        game_state["players"][players[0]]["strategy"] = strategies.human_strategy
-        game_state["players"][players[1]]["strategy"] = strategies.monte_carlo_bot_strategy
-
+        for p in players:
+            if p == players[0]:
+                game_state["players"][p]["strategy"] = strategies.human_strategy
+            else:
+                game_state["players"][p]["strategy"] = strategies.monte_carlo_bot_strategy
+       
     elif mode == "3":  # Computer vs Computer
-        game_state["players"][players[0]]["strategy"] = strategies.random_bot_strategy
-        game_state["players"][players[1]]["strategy"] = strategies.monte_carlo_bot_strategy
+        for p in players:
+            game_state["players"][p]["strategy"] = strategies.monte_carlo_bot_strategy
 
     while True:
         dealer = game_state["player_order"][game_state["dealer_index"]]

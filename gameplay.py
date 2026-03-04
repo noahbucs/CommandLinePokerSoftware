@@ -358,6 +358,7 @@ def all_players_all_in_or_folded(game_state):
 
     return len(not_all_in) <= 1
 
+# If we hit an all-in situation where betting is effectively over, run out the rest of the cards and resolve showdown immediately
 def runout_and_showdown(game_state):
     current_index = STAGES.index(game_state["stage"])
     remaining = STAGES[current_index + 1:]
@@ -378,7 +379,7 @@ def runout_and_showdown(game_state):
     resolve_showdown(game_state)
 
     cleanup_after_hand(game_state)
-
+# After a hand is fully resolved, reset pot and bets but keep chips and stats intact for next hand
 def cleanup_after_hand(game_state):
     game_state["pot"] = 0
     for p in game_state["players"]:

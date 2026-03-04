@@ -116,7 +116,6 @@ class StatsManager:
         self._hand_showdown = True
 
     def flush_hand(self):
-        """Call this at the end of every hand to persist data to SQLite."""
         if self._current_hand_id is None:
             return
         conn = sqlite3.connect(DB_PATH)
@@ -286,4 +285,13 @@ def _show_recent_hands():
         sd = "Yes" if showdown else "No"
         ts_short = ts[:16] if ts else "-"
         print(f"  {hand_id:>5}  {winner:<12}  {pot:>6}  {sd:>8}  {ts_short}")
+    conn.close()
+
+def clear_stats():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM hands")
+    c.execute("DELETE FROM actions")
+    c.execute("DELETE FROM player_results")
+    conn.commit()
     conn.close()

@@ -16,8 +16,10 @@ def show_main_menu():
         elif choice == "2":
             stats.view_stats_menu()
         elif choice == "3":
-            print(game_texts.RULES_TEXT)
+            stats.clear_stats()
         elif choice == "4":
+            print(game_texts.RULES_TEXT)
+        elif choice == "5":
             return None
         else:
             print(game_texts.INVALID)

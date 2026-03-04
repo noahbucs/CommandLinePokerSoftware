@@ -5,8 +5,9 @@ MENU_WELCOME = "Welcome to Texas Hold'em!"
 MENU_OPTIONS = (
     "1. Play Game\n"
     "2. View Stats\n"
-    "3. View Rules\n"
-    "4. Quit"
+    "3. Clear Stats\n"
+    "4. View Rules\n"
+    "5. Quit"
 )
 
 GAME_MODE_OPTIONS = (
@@ -15,7 +16,9 @@ GAME_MODE_OPTIONS = (
     "3. Computer vs Computer\n"  
     )
 
-MENU_PROMPT = "Select an option (1-4): "
+PLAYER_PROMPT = "Enter amount of players (2-8): "
+
+MENU_PROMPT = "Select an option (1-5): "
 
 # Rules
 RULES_TEXT = """
