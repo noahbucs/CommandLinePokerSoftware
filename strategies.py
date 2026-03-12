@@ -100,15 +100,119 @@ def estimate_equity(game_state, player, simulations=500):
     return (wins + ties * 0.5) / simulations
 
 def monte_carlo_bot_strategy(game_state, player, legal_actions):
-
     if game_state["stage"] == "pre-flop":
-        equity = estimate_equity(game_state, player, simulations=150)
+        equity = estimate_equity(game_state, player, simulations=400)
     else:
-        equity = estimate_equity(game_state, player, simulations=500)
+        equity = estimate_equity(game_state, player, simulations=1000)
+
+    player_data = game_state["players"][player]
+
+    player_bet = player_data["bet"]
+    chips = player_data["chips"]
+
+    current_bet = game_state["current_bet"]
+    to_call = max(0, current_bet - player_bet)
+
+    pot = game_state["pot"]
+    min_raise = game_state["min_raise"]
+
+    if to_call > 0:
+        pot_odds = to_call / (pot + to_call)
+    else:
+        pot_odds = 0
+
+    players = list(game_state["players"].keys())
+    position_index = players.index(player)
+
+    late_position = position_index >= len(players) * 0.6
+
+    bluff_chance = 0.08
+    if late_position:
+        bluff_chance = 0.15
+
+    if equity > 0.75:
+
+        if "raise" in legal_actions:
+            raise_amount = min(max(min_raise, pot // 2), chips)
+            return "raise", raise_amount
+
+        if "bet" in legal_actions:
+            bet_amount = min(max(min_raise, pot // 2), chips)
+            return "bet", bet_amount
+
+    if equity > 0.60:
+
+        if "raise" in legal_actions and random.random() < 0.5:
+            raise_amount = min(max(min_raise, pot // 3), chips)
+            return "raise", raise_amount
+
+        if "call" in legal_actions:
+            return "call", None
+
+    if equity > pot_odds:
+
+        if "call" in legal_actions:
+            return "call", None
+
+        if "check" in legal_actions:
+            return "check", None
+
+    if to_call == 0 and random.random() < bluff_chance:
+
+        if "bet" in legal_actions:
+            bet_amount = min(max(min_raise, pot // 4), chips)
+            return "bet", bet_amount
+
+    if to_call > 0:
+        return "fold", None
+
+    if "check" in legal_actions:
+        return "check", None
+
+    return "fold", None
+
+def easy_bot_strategy(game_state, player, legal_actions):
+
+    equity = estimate_equity(game_state, player, simulations=50)
 
     player_bet = game_state["players"][player]["bet"]
     current_bet = game_state["current_bet"]
     to_call = max(0, current_bet - player_bet)
+
+    # If facing a bet
+    if to_call > 0:
+
+        if equity > 0.6 and "call" in legal_actions:
+            return "call", None
+
+        if equity > 0.75 and "raise" in legal_actions:
+            min_raise = game_state["min_raise"]
+            chips = game_state["players"][player]["chips"]
+            return "raise", min(min_raise, chips)
+
+        return "fold", None
+
+    # If no bet
+    else:
+
+        if equity > 0.7 and "bet" in legal_actions:
+            chips = game_state["players"][player]["chips"]
+            bet = min(game_state["min_raise"], chips)
+            return "bet", bet
+
+        if "check" in legal_actions:
+            return "check", None
+
+    return "fold", None
+
+def medium_bot_strategy(game_state, player, legal_actions):
+
+    equity = estimate_equity(game_state, player, simulations=200)
+
+    player_bet = game_state["players"][player]["bet"]
+    current_bet = game_state["current_bet"]
+    to_call = max(0, current_bet - player_bet)
+
     pot = game_state["pot"]
     chips = game_state["players"][player]["chips"]
 
@@ -117,26 +221,38 @@ def monte_carlo_bot_strategy(game_state, player, legal_actions):
     else:
         pot_odds = 0
 
-    if equity > 0.65:
+    # Strong hand
+    if equity > 0.7:
+
         if "raise" in legal_actions:
             min_raise = game_state["min_raise"]
-           
-            raise_amount = max(min_raise, min(pot // 2, chips))
-            return "raise", raise_amount
-        elif "bet" in legal_actions:
-            bet_amount = max(game_state["min_raise"], min(pot // 2, chips))
-            return "bet", bet_amount
+            raise_amt = min(max(min_raise, pot // 3), chips)
+            return "raise", raise_amt
 
-    if "call" in legal_actions:
-        if equity > pot_odds:
+        if "call" in legal_actions:
             return "call", None
-        else:
-            return "fold", None
+
+    # Decent hand
+    if equity > pot_odds:
+
+        if "call" in legal_actions:
+            return "call", None
+
+        if "check" in legal_actions:
+            return "check", None
+
+    # Bluff sometimes
+    if to_call == 0 and equity > 0.4 and random.random() < 0.15:
+
+        if "bet" in legal_actions:
+            bet_amt = min(game_state["min_raise"], chips)
+            return "bet", bet_amt
+
+    # Weak
+    if to_call > 0:
+        return "fold", None
 
     if "check" in legal_actions:
-        if equity > 0.55 and "bet" in legal_actions:
-            bet_amount = max(game_state["min_raise"], min(pot // 3, chips))
-            return "bet", bet_amount
         return "check", None
 
     return "fold", None
