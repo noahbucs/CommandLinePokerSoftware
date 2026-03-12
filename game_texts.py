@@ -1,7 +1,7 @@
-# game_texts.py
-
 # Main menu
+
 MENU_WELCOME = "Welcome to Texas Hold'em!"
+
 MENU_OPTIONS = (
     "1. Play Game\n"
     "2. View Stats\n"
@@ -10,17 +10,31 @@ MENU_OPTIONS = (
     "5. Quit"
 )
 
+MENU_PROMPT = "Select an option (1-5): "
+
+# Game mode selection
 GAME_MODE_OPTIONS = (
     "1. Player vs Player\n"
     "2. Player vs Computer\n"
-    "3. Computer vs Computer\n"  
-    )
+    "3. Computer vs Computer\n"
+)
 
 PLAYER_PROMPT = "Enter amount of players (2-8): "
 
-MENU_PROMPT = "Select an option (1-5): "
 
-# Rules
+# Bot difficulty
+
+BOT_DIFFICULTY_PROMPT = (
+    "\nSelect bot difficulty:\n"
+    "1. Easy\n"
+    "2. Medium\n"
+    "3. Hard\n"
+    "4. Chaos\n"
+)
+
+
+# Rules text
+
 RULES_TEXT = """
 Welcome to Texas Hold'em!
 
@@ -32,13 +46,14 @@ Rules:
    - Flop: 3 cards
    - Turn: 1 card
    - River: 1 card
-5. Betting rounds happen pre-flop, post-flop, turn, and river.
-6. Players can Check (c), Bet (b), Call (c), Raise (r), or Fold (f).
-7. Minimum raise rules are enforced.
-8. Showdown occurs if more than 1 player remains after the river.
-9. Winner is determined by best hand ranking.
+5. Betting rounds occur pre-flop, flop, turn, and river.
+6. Players may check, bet, call, raise, or fold.
+7. Minimum raise rules apply.
+8. Showdown occurs if multiple players remain after the river.
+9. The best 5-card poker hand wins.
 
 Have fun!
 """
 
+# Error messages
 INVALID = "Invalid input. Please try again."

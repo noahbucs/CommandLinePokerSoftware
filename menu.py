@@ -1,7 +1,7 @@
 import game_texts
 import stats
 
-#Display main menu and handle user input
+
 def show_main_menu():
     while True:
         print("\n" + "=" * 40)
@@ -12,26 +12,77 @@ def show_main_menu():
         choice = input(game_texts.MENU_PROMPT)
 
         if choice == "1":
-            return choose_game_mode()
+
+            settings = choose_game_mode()
+            settings["players"] = choose_player_count()
+
+            return settings
+
         elif choice == "2":
             stats.view_stats_menu()
+
         elif choice == "3":
             stats.clear_stats()
+
         elif choice == "4":
             print(game_texts.RULES_TEXT)
+
         elif choice == "5":
             return None
+
         else:
             print(game_texts.INVALID)
 
+
 def choose_game_mode():
+
     while True:
+
         print("\nSelect Game Mode:")
         print(game_texts.GAME_MODE_OPTIONS)
 
         choice = input("Select mode (1-3): ")
 
-        if choice in ["1", "2", "3"]:
-            return choice
+        if choice == "1":
+            return {"mode": "pvp"}
+
+        elif choice == "2":
+            difficulty = choose_bot_difficulty()
+            return {"mode": "pvc", "difficulty": difficulty}
+
+        elif choice == "3":
+            difficulty = choose_bot_difficulty()
+            return {"mode": "cvc", "difficulty": difficulty}
+
         else:
             print(game_texts.INVALID)
+
+
+def choose_player_count():
+    while True:
+        num_players = input(game_texts.PLAYER_PROMPT)
+        if num_players.isdigit() and 2 <= int(num_players) <= 8:
+            return int(num_players)
+        print(game_texts.INVALID)
+
+
+def choose_bot_difficulty():
+    while True:
+        print(game_texts.BOT_DIFFICULTY_PROMPT)
+        choice = input("Select difficulty (1-4): ")
+        if choice == "1":
+            return "easy"
+        elif choice == "2":
+            return "medium"
+        elif choice == "3":
+            return "hard"
+        elif choice == "4":
+            return "chaos"
+        else:
+            print(game_texts.INVALID)
+def play_again():
+    while True:
+        again = input("\nPlay again? (y/n): ").strip().lower()
+        if again in ["y", "n"]:
+            return again == "y"
+        print(game_texts.INVALID)

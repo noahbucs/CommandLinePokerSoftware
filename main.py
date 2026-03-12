@@ -3,47 +3,57 @@ import constants
 from game_state import create_game_state
 import strategies
 import menu
-import game_texts
 
-def main(mode):
-    #Create game state
-    num_players = None
+
+def get_bot_strategy(difficulty):
+    if difficulty == "easy":
+        return strategies.easy_bot_strategy
+    elif difficulty == "medium":
+        return strategies.medium_bot_strategy
+    elif difficulty == "hard":
+        return strategies.monte_carlo_bot_strategy
+    else:
+        return strategies.random_bot_strategy
+
+
+def main(settings):
+
+    num_players = settings["players"]
+    mode = settings["mode"]
+    difficulty = settings.get("difficulty")
+
     starting_chips = 1000
     hand_number = 1
-
-    while num_players is None:
-        num_players = input(game_texts.PLAYER_PROMPT)
-        if num_players.isdigit() and 2 <= int(num_players) <= 8:
-            num_players = int(num_players)
-        else:
-            print(game_texts.INVALID)
-            num_players = None
 
     game_state = create_game_state(
         num_players=num_players,
         starting_chips=starting_chips,
         small_blind=constants.STARTINGBLIND
     )
-    
+
     players = list(game_state["players"].keys())
 
-    if mode == "1":  # Player vs Player
+    if mode == "pvp":
         for p in players:
             game_state["players"][p]["strategy"] = strategies.human_strategy
 
-    elif mode == "2":  # Player vs Computer
+    elif mode == "pvc":
         for p in players:
             if p == players[0]:
                 game_state["players"][p]["strategy"] = strategies.human_strategy
             else:
-                game_state["players"][p]["strategy"] = strategies.monte_carlo_bot_strategy
-       
-    elif mode == "3":  # Computer vs Computer
+                game_state["players"][p]["strategy"] = get_bot_strategy(difficulty)
+
+    elif mode == "cvc":
         for p in players:
-            game_state["players"][p]["strategy"] = strategies.monte_carlo_bot_strategy
+            game_state["players"][p]["strategy"] = get_bot_strategy(difficulty)
+
+        game_state["verbose"] = False
 
     while True:
+
         dealer = game_state["player_order"][game_state["dealer_index"]]
+
         print(f"\n--- Hand {hand_number} ---")
         print(f"Dealer: {dealer}")
 
@@ -51,41 +61,43 @@ def main(mode):
         gameplay.advance_dealer(game_state)
         gameplay.play_round(game_state)
 
-
         game_state["stats"].flush_hand()
 
         print("\nChip Counts:")
         for p, d in game_state["players"].items():
             print(p, d["chips"])
 
-        over, active_players_remaining = game_over(game_state)
+        over, active_players = game_over(game_state)
+
         if over:
-            print(f"\nGame Over! Winner: {active_players_remaining[0]}")
+            print(f"\nGame Over! Winner: {active_players[0]}")
             game_state["stats"].print_stats()
             break
 
         hand_number += 1
 
+
 def game_over(game_state):
+
     active = [
         p for p, d in game_state["players"].items()
         if d["chips"] > 0
     ]
+
     return len(active) == 1, active
 
 
 if __name__ == "__main__":
-    while True:
-        mode = menu.show_main_menu()
 
-        if mode is None:
+    while True:
+
+        settings = menu.show_main_menu()
+
+        if settings is None:
             break
 
-        main(mode)
+        main(settings)
 
-        again = input("\nPlay again? (y/n): ").strip().lower()
-        while again not in ["y", "n"]:
-            again = input("Please enter y or n: ").strip().lower()
-            if again != "y":
-                print("Thanks for playing!")
-                break
+        if not menu.play_again():
+            print("Thanks for playing!")
+            break
