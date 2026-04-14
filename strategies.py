@@ -299,15 +299,7 @@ def preflop_decision(game_state, player, legal_actions):
  
   
 def should_bluff(game_state, player, texture, equity):
-    """
-    Returns (do_bluff: bool, bet_sizing: float of pot).
-    Conditions for a bluff:
-    - Board is scary for opponents (high straight/flush draw danger)
-    - Player is in late position
-    - Opponent is tight (fold_tendency high)
-    - equity is low-ish (genuine bluff, not value bet)
-    - Not too many opponents
-    """
+   
     if equity > 0.55:
         return False, 0   # just value-bet
  
