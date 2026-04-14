@@ -239,7 +239,11 @@ def resolve_showdown(game_state):
             won = p in winners
             stats.record_showdown(p, won)
 
-        print(f"Side pot {pot['amount']} won by {winners}")
+        print(f"Pot {pot['amount']} won by {winners}")
+        for w in winners:
+            print(f"Player {w}'s hand: {players[w]['hand']}")
+
+        
 
 # Betting Logic
 def post_blinds(game_state):
@@ -303,6 +307,7 @@ def check_fold_win(game_state):
         pot = game_state["pot"]
         game_state["players"][winner]["chips"] += pot
         print(f"\n{winner} wins the pot ({pot}) by everyone folding.")
+        print(f"{winner}'s hand: {game_state['players'][winner]['hand']}")
         game_state["pot"] = 0
         return winner, pot
 
@@ -463,12 +468,14 @@ def betting_phase(game_state):
             bb_player = players[(dealer + 1) % len(players)]
         else:
             bb_player = players[(dealer + 2) % len(players)]
-        players_acted = {bb_player}
+        players_acted = set()
+        bb_option_player = bb_player
         last_raiser = game_state.get("last_raiser")
     else:
         game_state["last_raiser"] = None
         players_acted = set()
         last_raiser = None
+        bb_option_player = None
 
     while True:
         action_order = get_action_order(game_state, game_state["stage"])
@@ -488,7 +495,8 @@ def betting_phase(game_state):
             to_call = max(0, game_state["current_bet"] - data["bet"])
             chips = data["chips"]
 
-            if game_state.get("verbose", True):
+            is_human = getattr(game_state["players"][player]["strategy"], "__name__", "") == "human_strategy"
+            if game_state.get("verbose", True) and is_human:
                 print(f"\n{player}'s turn")
                 print(f"Stage: {game_state['stage']}")
                 print(f"Community Cards: {game_state['community_cards']}")
@@ -639,7 +647,10 @@ def betting_phase(game_state):
         )
 
         if bets_equal and all(p in players_acted for p in active_not_allin):
-            break
+             if bb_option_player and bb_option_player not in players_acted and bb_option_player in active_not_allin:
+                 pass
+             else:
+                break
 
         if not acted_this_pass:
             break
