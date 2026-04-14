@@ -4,7 +4,6 @@ from game_state import create_game_state
 import strategies
 import menu
 
-
 def get_bot_strategy(difficulty):
     if difficulty == "easy":
         return strategies.easy_bot_strategy
@@ -15,12 +14,12 @@ def get_bot_strategy(difficulty):
     else:
         return strategies.random_bot_strategy
 
-
 def main(settings):
 
     num_players = settings["players"]
     mode = settings["mode"]
-    difficulty = settings.get("difficulty")
+    bot_difficulties = settings.get("bot_difficulties", [])
+   
 
     starting_chips = 1000
     hand_number = 1
@@ -38,14 +37,17 @@ def main(settings):
             game_state["players"][p]["strategy"] = strategies.human_strategy
 
     elif mode == "pvc":
-        for p in players:
-            if p == players[0]:
+        for i, p in enumerate(players):
+            if i == 0:
                 game_state["players"][p]["strategy"] = strategies.human_strategy
             else:
+                difficulty = bot_difficulties[i - 1]
                 game_state["players"][p]["strategy"] = get_bot_strategy(difficulty)
 
+
     elif mode == "cvc":
-        for p in players:
+        for i, p in enumerate(players):
+            difficulty = bot_difficulties[i]
             game_state["players"][p]["strategy"] = get_bot_strategy(difficulty)
 
         game_state["verbose"] = False
