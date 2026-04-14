@@ -12,10 +12,7 @@ def show_main_menu():
         choice = input(game_texts.MENU_PROMPT)
 
         if choice == "1":
-
             settings = choose_game_mode()
-            settings["players"] = choose_player_count()
-
             return settings
 
         elif choice == "2":
@@ -35,24 +32,31 @@ def show_main_menu():
 
 
 def choose_game_mode():
-
     while True:
-
         print("\nSelect Game Mode:")
         print(game_texts.GAME_MODE_OPTIONS)
 
         choice = input("Select mode (1-3): ")
 
         if choice == "1":
-            return {"mode": "pvp"}
+            num_players = choose_player_count()
+            return {"mode": "pvp", "players": num_players}
 
         elif choice == "2":
-            difficulty = choose_bot_difficulty()
-            return {"mode": "pvc", "difficulty": difficulty}
+            num_players = choose_player_count()
+            bot_difficulties = []
+            for i in range(2, num_players + 1):
+                print(f"\nSet difficulty for Player {i} (bot):")
+                bot_difficulties.append(choose_bot_difficulty())
+            return {"mode": "pvc", "players": num_players, "bot_difficulties": bot_difficulties}
 
         elif choice == "3":
-            difficulty = choose_bot_difficulty()
-            return {"mode": "cvc", "difficulty": difficulty}
+            num_players = choose_player_count()
+            bot_difficulties = []
+            for i in range(1, num_players + 1):
+                print(f"\nSet difficulty for Player {i} (bot):")
+                bot_difficulties.append(choose_bot_difficulty())
+            return {"mode": "cvc", "players": num_players, "bot_difficulties": bot_difficulties}
 
         else:
             print(game_texts.INVALID)
@@ -80,6 +84,7 @@ def choose_bot_difficulty():
             return "chaos"
         else:
             print(game_texts.INVALID)
+
 def play_again():
     while True:
         again = input("\nPlay again? (y/n): ").strip().lower()
