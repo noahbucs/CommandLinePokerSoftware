@@ -4,7 +4,8 @@ from game_state import create_game_state
 import strategies
 import menu
 
-def get_bot_strategy(difficulty):
+
+def get_bot_strategy(difficulty): # Returns the appropriate strategy function based on the difficulty level
     if difficulty == "easy":
         return strategies.easy_bot_strategy
     elif difficulty == "medium":
@@ -14,23 +15,21 @@ def get_bot_strategy(difficulty):
     else:
         return strategies.random_bot_strategy
 
-def main(settings):
 
+def main(settings):
     num_players = settings["players"]
     mode = settings["mode"]
     bot_difficulties = settings.get("bot_difficulties", [])
    
-
-    starting_chips = 1000
     hand_number = 1
 
     game_state = create_game_state(
         num_players=num_players,
-        starting_chips=starting_chips,
+        starting_chips=constants.STARTINGFUNDS,
         small_blind=constants.STARTINGBLIND
     )
 
-    players = list(game_state["players"].keys())
+    players = list(game_state["players"].keys()) 
 
     if mode == "pvp":
         for p in players:
@@ -52,7 +51,7 @@ def main(settings):
 
         game_state["verbose"] = False
 
-    while True:
+    while True: # Main game loop that continues until a winner is determined
 
         dealer = game_state["player_order"][game_state["dealer_index"]]
 
@@ -79,7 +78,7 @@ def main(settings):
         hand_number += 1
 
 
-def game_over(game_state):
+def game_over(game_state): # Checks if the game is over by counting how many players still have chips. 
 
     active = [
         p for p, d in game_state["players"].items()

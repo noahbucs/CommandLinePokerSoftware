@@ -5,23 +5,24 @@ from collections import defaultdict, Counter
 from gameplay import rank_hand
 
 # Simple LRU cache implementation for equity simulation results.
+# Note: Didnt fully understand this had to use examples from the internet to implement it. 
 class SimCache:
     # LRU cache for storing recent equity simulation results to speed up repeated lookups on similar board textures.    
     def __init__(self, maxsize=512):
-        self._store = {}
+        self.store = {}
         self._maxsize = maxsize
     # Key is (sorted hero hand, community cards) to ensure order-independence of hole cards and board.
-    def _key(self, hero_hand, community):
+    def key(self, hero_hand, community):
         return (tuple(sorted(hero_hand)), tuple(community))
     # Get cached equity for a given hero hand and community cards, or None if not found.
     def get(self, hero_hand, community):
-        return self._store.get(self._key(hero_hand, community))
+        return self.store.get(self.key(hero_hand, community))
     # Store equity in cache for a given hero hand and community cards, evicting oldest entry if cache is full.
     def put(self, hero_hand, community, value):
-        if len(self._store) >= self._maxsize:
+        if len(self.store) >= self._maxsize:
             # Evict a random entry
-            self._store.pop(next(iter(self._store)))
-        self._store[self._key(hero_hand, community)] = value
+            self.store.pop(next(iter(self.store)))
+        self.store[self._key(hero_hand, community)] = value
 # Global cache instance for equity simulations (shared across all bot instances in the process).
 equity_cache = SimCache(maxsize=1024)
 
@@ -112,12 +113,12 @@ def analyze_board(community_cards):
              (0.15 if paired_board else 0) + \
              (0.25 if trips_on_board else 0)
     danger = min(danger, 1.0)
- 
+    
     return dict(flush_draw=flush_draw, flush_complete=flush_complete,
                 straight_draw=straight_draw, straight_complete=straight_complete,
                 paired_board=paired_board, trips_on_board=trips_on_board,
-                monotone=monotone, danger=danger)
- 
+                monotone=monotone, danger=danger) 
+# Build a weighted deck of possible opponent hole cards based on their VPIP% and PFR%, excluding known cards. Higher VPIP% means a wider range, while lower VPIP% means a tighter range focused on premium hands.
 def build_range_deck(deck, vpip_pct, pfr_pct, excluded_cards=None):
     excluded = set(excluded_cards) if excluded_cards else set()
     if vpip_pct is None:
@@ -128,7 +129,7 @@ def build_range_deck(deck, vpip_pct, pfr_pct, excluded_cards=None):
     tightness = max(0.0, min(1.0, 1.0 - vpip_pct / 100.0))
     high_ranks = {'A', 'K', 'Q', 'J', '10'}
     weighted = []
-    for card in deck:
+    for card in deck: 
         if card in excluded:
             continue
         rank = card[:-1]
@@ -137,7 +138,7 @@ def build_range_deck(deck, vpip_pct, pfr_pct, excluded_cards=None):
         weighted.extend([card] * count)
     random.shuffle(weighted)
     return weighted
-
+# Get opponent stats from game state, returning VPIP%, PFR%, aggression factor, fold tendency, WTSD% and hands played. Uses defaults to avoid division by zero.
 def get_opponent_stats(game_state, player):
     session = game_state["stats"].session
     s = session.get(player, {})
@@ -339,7 +340,7 @@ def should_bluff(game_state, player, texture, equity):
 
  
 def value_size(equity, pot, chips, min_raise):
-    """Return a bet/raise amount based on equity strength."""
+    #Return a bet/raise amount based on equity strength.
     if equity > 0.85:
         frac = random.uniform(0.7, 1.0)   # big value
     elif equity > 0.70:
@@ -353,7 +354,7 @@ def value_size(equity, pot, chips, min_raise):
     noise = random.randint(-min_raise // 2, min_raise // 2)
     return min(max(min_raise, amount + noise), chips)
 
-
+# Human strategy: prompts user for action and amount, validating against legal actions. Simple text-based interface.
 def human_strategy(game_state, player, legal_actions):
     print(f"\n{player}'s turn.")
     print("Legal actions:", legal_actions)
@@ -368,7 +369,7 @@ def human_strategy(game_state, player, legal_actions):
         return action, amount
 
     return action, None
-
+# Random bot strategy: chooses randomly among legal actions, with some logic to avoid illegal bets/raises and to add variability in bet sizing. No hand analysis.
 def random_bot_strategy(game_state, player, legal_actions):
     chips = game_state["players"][player]["chips"]
     min_raise = game_state.get("min_raise", 0)
@@ -392,7 +393,7 @@ def random_bot_strategy(game_state, player, legal_actions):
         return action, amount
 
     return action, None
-
+# Monte Carlo bot strategy: uses pre-flop tier-based decisions, and post-flop equity estimation with board texture analysis to make informed decisions. Adjusts aggression based on hand strength, pot odds, and opponent tendencies. Also includes a bluffing component that considers board texture and opponent fold tendencies.
 def monte_carlo_bot_strategy(game_state, player, legal_actions):
     stage    = game_state["stage"]
     chips    = game_state["players"][player]["chips"]
@@ -456,7 +457,7 @@ def monte_carlo_bot_strategy(game_state, player, legal_actions):
         return "check", None
     return "fold", None
 
-
+# Easy bot strategy: uses pre-flop tiers for initial decisions, and a simple equity threshold post-flop to decide when to call, bet, or fold. Does not consider board texture or opponent tendencies, making it more predictable and easier to exploit.
 def easy_bot_strategy(game_state, player, legal_actions):
     stage   = game_state["stage"]
     to_call = max(0, game_state["current_bet"] - game_state["players"][player]["bet"])
@@ -491,7 +492,7 @@ def easy_bot_strategy(game_state, player, legal_actions):
             return "check", None
     return "fold", None
  
- 
+ # Medium bot strategy: combines pre-flop tier-based decisions with post-flop equity estimation and board texture analysis. Adjusts aggression based on hand strength, pot odds, and opponent tendencies. Also includes a bluffing component that considers board texture and opponent fold tendencies, but with more conservative frequencies than the Monte Carlo bot.
 def medium_bot_strategy(game_state, player, legal_actions):
     stage     = game_state["stage"]
     chips     = game_state["players"][player]["chips"]
