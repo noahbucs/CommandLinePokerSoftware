@@ -52,6 +52,9 @@ class StatsManager:
         self._hand_winner = None
         self._hand_pot = 0
         self._hand_showdown = False
+        self._hand_chips_won = {}
+        self._hand_went_to_showdown = {}
+        self._hand_won_showdown = {}
 
     def reset_session_stats(self):
         self.session = {
@@ -78,6 +81,10 @@ class StatsManager:
         self._hand_winner = None
         self._hand_pot = 0
         self._hand_showdown = False
+        self._hand_chips_won = {p: 0 for p in self.players}
+        self._hand_went_to_showdown = {p: 0 for p in self.players}
+        self._hand_won_showdown = {p: 0 for p in self.players}
+
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("INSERT INTO hands (winner, pot, showdown) VALUES (NULL, 0, 0)")
@@ -106,14 +113,21 @@ class StatsManager:
     def record_win(self, player, amount):
         self.session[player]["wins"]      += 1
         self.session[player]["chips_won"] += amount
-        self._hand_winner = player
-        self._hand_pot    = amount
+        self._hand_chips_won[player] = self._hand_chips_won.get(player, 0) + amount
+        if self._hand_winner is None:
+            self._hand_winner = player
+        elif player not in self._hand_winner.split(","):
+            self._hand_winner = self._hand_winner + "," + player
+        self._hand_pot += amount
 
     def record_showdown(self, player, won):
         self.session[player]["went_to_showdown"] += 1
         if won:
             self.session[player]["won_showdown"] += 1
         self._hand_showdown = True
+        self._hand_went_to_showdown[player] = self._hand_went_to_showdown.get(player, 0) + 1
+        if won:
+            self._hand_won_showdown[player] = self._hand_won_showdown.get(player, 0) + 1
 
     def flush_hand(self):
         if self._current_hand_id is None:
@@ -130,13 +144,14 @@ class StatsManager:
             VALUES (?, ?, ?, ?)
         """, self._pending_actions)
         for player in self.players:
-            s = self.session[player]
             c.execute("""
                 INSERT INTO player_results
                 (hand_id, player, chips_won, went_to_showdown, won_showdown)
                 VALUES (?, ?, ?, ?, ?)
             """, (self._current_hand_id, player,
-                  s["chips_won"], s["went_to_showdown"], s["won_showdown"]))
+                  self._hand_chips_won.get(player, 0),
+                  self._hand_went_to_showdown.get(player, 0),
+                  self._hand_won_showdown.get(player, 0)))
         conn.commit()
         conn.close()
         self._pending_actions = []
@@ -163,7 +178,7 @@ class StatsManager:
                 print(f"    Showdown Win % : {wtsd:.1f}%")
 
 def view_stats_menu():
-    init_db()  
+    init_db()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM hands WHERE winner IS NOT NULL")
@@ -209,7 +224,7 @@ def _show_player_summary():
     for player in players:
         c.execute("SELECT COUNT(DISTINCT hand_id) FROM actions WHERE player=?", (player,))
         hands = c.fetchone()[0] or 1
-        c.execute("SELECT COUNT(*) FROM hands WHERE winner=?", (player,))
+        c.execute("SELECT COUNT(*) FROM hands WHERE winner LIKE ?", (f"%{player}%",))
         wins = c.fetchone()[0]
         c.execute("""
             SELECT COUNT(DISTINCT hand_id) FROM actions
@@ -279,12 +294,12 @@ def _show_recent_hands():
         print("  No completed hands found.")
         conn.close()
         return
-    print(f"  {'Hand':>5}  {'Winner':<12}  {'Pot':>6}  {'Showdown':>8}  Timestamp")
-    print("  " + "-" * 55)
+    print(f"  {'Hand':>5}  {'Winner':<16}  {'Pot':>6}  {'Showdown':>8}  Timestamp")
+    print("  " + "-" * 60)
     for hand_id, winner, pot, showdown, ts in rows:
         sd = "Yes" if showdown else "No"
         ts_short = ts[:16] if ts else "-"
-        print(f"  {hand_id:>5}  {winner:<12}  {pot:>6}  {sd:>8}  {ts_short}")
+        print(f"  {hand_id:>5}  {winner:<16}  {pot:>6}  {sd:>8}  {ts_short}")
     conn.close()
 
 def clear_stats():
@@ -293,5 +308,8 @@ def clear_stats():
     c.execute("DELETE FROM hands")
     c.execute("DELETE FROM actions")
     c.execute("DELETE FROM player_results")
+    c.execute("DELETE FROM sqlite_sequence WHERE name='hands'")
+    c.execute("DELETE FROM sqlite_sequence WHERE name='actions'")
+    c.execute("DELETE FROM sqlite_sequence WHERE name='player_results'")
     conn.commit()
     conn.close()
