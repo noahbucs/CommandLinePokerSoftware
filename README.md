@@ -2,43 +2,69 @@
 
 A command-line **Texas Hold'em** simulator written in Python.
 
-This project supports human and bot play, multiple game modes, hand evaluation, side-pot handling, and persistent stats in SQLite.
+Supports human and bot play, multiple game modes, hand evaluation, side-pot handling, and persistent stats stored in SQLite.
 
 ## Features
 
-- **Texas Hold'em game loop** with blinds, dealer rotation, betting streets, and showdown resolution.
+- **Texas Hold'em game loop** with blinds, dealer rotation, betting streets, and showdown resolution
 - **Multiple game modes**:
   - Player vs Player (PvP)
   - Player vs Computer (PvC)
   - Computer vs Computer (CvC)
 - **Bot difficulties**:
-  - Easy
-  - Medium
-  - Hard (Monte Carlo equity-based decisions)
-  - Chaos (random actions)
-- **Poker engine support** for:
-  - legal action generation (check/call/bet/raise/fold/all-in)
-  - hand ranking and winner selection
-  - all-in runouts and side-pot distribution
-- **Persistent statistics** (SQLite):
-  - hand history
-  - per-action logs
-  - player summary metrics (VPIP, PFR, aggression, showdown rates)
+  - Easy — tier-based preflop + light equity post-flop
+  - Medium — tier-based preflop + Monte Carlo equity with board awareness
+  - Hard — full Monte Carlo equity with position, opponent reads, bluffing, and value sizing
+  - Chaos — random actions
+- **Advanced bot features** (Medium / Hard):
+  - Monte Carlo equity estimation with opponent range modeling based on observed VPIP/PFR
+  - Board texture analysis (flush draws, straight draws, paired boards, danger scoring)
+  - Opponent classification (tight-aggressive, loose-passive, etc.)
+  - Position-aware decisions and bluff frequency tuning
+  - LRU equity cache to reduce redundant simulations
+- **Poker engine** supporting:
+  - Legal action generation (check / call / bet / raise / fold / all-in)
+  - Hand ranking across all 7-card combinations
+  - All-in runouts and side-pot distribution
+- **Persistent statistics** via SQLite:
+  - Hand history with winner, pot size, and showdown flag
+  - Per-action logs by player and street
+  - Session and database-wide player metrics (VPIP, PFR, aggression factor, showdown win rate)
 
 ## Requirements
 
+**To run from source:**
 - Python **3.9+**
-- No third-party packages required (uses only Python standard library)
+- No third-party packages required (standard library only)
+
+**To run the executable:**
+- Windows 10/11 (64-bit)
+- No Python installation needed — everything is bundled via PyInstaller
 
 ## Quick Start
 
-From the repository root:
+### Option 1 — Run the executable (no Python required)
+
+A pre-built Windows executable is included for convenience.
+
+1. Download `main.exe` from the repository
+2. Double-click it, or run it from a terminal:
+
+```bash
+main.exe
+```
+
+> **Note:** Windows may show a SmartScreen warning for unsigned executables. Click **More info → Run anyway** to proceed.
+
+### Option 2 — Run from source
+
+Requires Python 3.9+.
 
 ```bash
 python3 main.py
 ```
 
-Then use the in-game menu to:
+Use the in-game menu to:
 
 1. Start a game
 2. View database stats
@@ -51,45 +77,43 @@ Then use the in-game menu to:
 When starting a game you can choose:
 
 - **Mode**: PvP, PvC, or CvC
-- **Player count**: 2 to 8
-- **Bot difficulty** (for modes with bots): easy, medium, hard, chaos
+- **Player count**: 2–8
+- **Bot difficulty** (for modes with bots): Easy, Medium, Hard, Chaos
 
-Default settings include:
+Default settings:
 
 - Starting chips: `1000`
 - Starting small blind: `10`
 
 ## Stats & Database
 
-Stats are persisted in:
+Stats are persisted in `poker_stats.db` across sessions. The app records:
 
-- `poker_stats.db`
+- `hands` — winner, pot size, showdown flag, timestamp
+- `actions` — every player action logged by street
+- `player_results` — per-hand chip delta and showdown outcomes
 
-The app records:
+View stats through the app menu (**View Stats**), including:
 
-- Hands (`hands` table)
-- Player actions by stage (`actions` table)
-- Player results (`player_results` table)
-
-You can inspect stats through the app menu (**View Stats**), including:
-
-- overall player summary
-- action breakdown by player/street
-- recent hand history
+- Overall player summary (VPIP, PFR, aggression, win rate, showdown %)
+- Action breakdown by player and street
+- Recent hand history (last 10 hands)
 
 ## Project Structure
 
-- `main.py` — entrypoint and overall game loop
-- `menu.py` — interactive menu and setup prompts
-- `gameplay.py` — dealing, betting rounds, hand evaluation, pots/showdown
-- `strategies.py` — human input + bot strategies (including Monte Carlo bot)
-- `game_state.py` — initial game-state construction
-- `stats.py` — session stats + SQLite persistence/reporting
-- `constants.py` — ranks, suits, blinds, and rank values
-- `game_texts.py` — menu/rules UI text
+| File | Description |
+|---|---|
+| `main.py` | Entrypoint, game loop, game-over detection |
+| `menu.py` | Interactive menus and setup prompts |
+| `gameplay.py` | Dealing, betting rounds, hand evaluation, side-pots, showdown |
+| `strategies.py` | Human input + all bot strategies including Monte Carlo |
+| `game_state.py` | Initial game-state construction |
+| `stats.py` | Session stats tracking + SQLite persistence and reporting |
+| `constants.py` | Ranks, suits, blind sizes, rank values, preflop tier table |
+| `game_texts.py` | UI strings for menus and rules display |
 
 ## Notes
 
-- This is a terminal game; no GUI is required.
-- CvC mode is useful for quickly simulating many hands and generating stats.
-- Existing `poker_stats.db` data may reflect previous runs in this directory.
+- Terminal only — no GUI required.
+- CvC mode is useful for quickly simulating many hands and building up stat history.
+- Existing `poker_stats.db` data persists between runs unless cleared from the menu.
