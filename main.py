@@ -20,8 +20,6 @@ def main(settings):
     num_players = settings["players"]
     mode = settings["mode"]
     bot_difficulties = settings.get("bot_difficulties", [])
-   
-    hand_number = 1
 
     game_state = create_game_state(
         num_players=num_players,
@@ -53,7 +51,8 @@ def main(settings):
 
     while True: # Main game loop that continues until a winner is determined
 
-        dealer = game_state["player_order"][game_state["dealer_index"]]
+        dealer = game_state["player_order"][game_state["dealer_index"]]   
+        hand_number = game_state["hand_number"]
 
         print(f"\n--- Hand {hand_number} ---")
         print(f"Dealer: {dealer}")
@@ -75,8 +74,7 @@ def main(settings):
             game_state["stats"].print_stats()
             break
 
-        hand_number += 1
-
+        game_state["hand_number"] += 1
 
 def game_over(game_state): # Checks if the game is over by counting how many players still have chips. 
 

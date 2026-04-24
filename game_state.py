@@ -20,6 +20,7 @@ def create_game_state(num_players, starting_chips, small_blind):
         "deck": [],
         "current_bet": 0,
         "stage": "preflop",
+        "hand_number": 1,
         "last_raiser": None,
         "dealer_index": random.randint(0,num_players-1),    
         "player_order": [f"Player {i+1}" for i in range(num_players)],

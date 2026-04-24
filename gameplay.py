@@ -246,10 +246,16 @@ def resolve_showdown(game_state):
 
 # Betting Logic
 def post_blinds(game_state):
+    
     players = game_state["player_order"]
     active_players = [
         p for p in players if game_state["players"][p]["chips"] > 0
     ]
+
+    if  game_state["hand_number"] % 10 == 0: # Every 10 hands, double the blinds
+        game_state["small_blind"] *= 2
+        game_state["big_blind"] *= 2
+        print(f"\nBlinds have increased! Small Blind: {game_state['small_blind']}, Big Blind: {game_state['big_blind']}")
 
     dealer = game_state["dealer_index"]
 
