@@ -56,4 +56,4 @@ Have fun!
 """
 
 # Error messages
-INVALID = "Invalid input. Please try again."
+INVALID = "Invalid input. Please try again. "
