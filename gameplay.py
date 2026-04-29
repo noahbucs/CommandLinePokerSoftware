@@ -13,9 +13,6 @@ def shuffle_deck(game_state):
 
 #resets everything back to default
 def reset_round(game_state):
-    game_state["deck"] = [
-        r + s for s in SUITS for r in RANKS
-    ]
     shuffle_deck(game_state)
 
     game_state["stage"] = "preflop"
@@ -23,11 +20,6 @@ def reset_round(game_state):
     game_state["pot"] = 0
     game_state["current_bet"] = 0
     game_state["min_raise"] = game_state["big_blind"]
-
-    for p in game_state["players"]:
-        game_state["players"][p]["bet"] = 0
-        game_state["players"][p]["folded"] = False
-        game_state["players"][p]["all_in"] = False  
 
     for data in game_state["players"].values():
         data["hand"] = []
@@ -318,7 +310,8 @@ def check_fold_win(game_state):
         return winner, pot
 
     return None, 0
-# When players go all-in with different amounts, we need to create side pots to handle the fact that not everyone is contesting the full pot. 
+# When players go all-in with different amounts, we need to create side pots to handle 
+# the fact that not everyone is contesting the full pot. 
 # This function builds those side pots based on the total contributions of each player.
 def build_side_pots(game_state):
     players = game_state["players"]
