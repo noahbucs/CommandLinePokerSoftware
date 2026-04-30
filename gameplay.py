@@ -209,7 +209,15 @@ def resolve_showdown(game_state):
             p for p in pot["eligible"]
             if not players[p]["folded"]
         ]
-
+    shown = set()
+    
+    for pot in side_pots:
+        eligible = [p for p in pot["eligible"] if not players[p]["folded"]]
+        best = max(hand_strengths[p] for p in eligible) if eligible else None
+        for p in eligible:
+            if p not in shown and best and hand_strengths[p] == best:
+                print(f"{p}'s hand: {players[p]['hand']}")
+                shown.add(p)
         if not eligible:
             continue
 
@@ -230,55 +238,58 @@ def resolve_showdown(game_state):
             won = p in winners
             stats.record_showdown(p, won)
 
-        print(f"Pot {pot['amount']} won by {winners}")
-        for w in winners:
-            print(f"Player {w}'s hand: {players[w]['hand']}")
-
+        pot_winners_str = ", ".join(winners)
+        print(f"Pot {pot['amount']} won by {pot_winners_str}")
         
 
 # Betting Logic
 def post_blinds(game_state):
-    
     players = game_state["player_order"]
     active_players = [
         p for p in players if game_state["players"][p]["chips"] > 0
     ]
 
-    if  game_state["hand_number"] % 10 == 0: # Every 10 hands, double the blinds
-        game_state["small_blind"] *= 2
-        game_state["big_blind"] *= 2
-        print(f"\nBlinds have increased! Small Blind: {game_state['small_blind']}, Big Blind: {game_state['big_blind']}")
+    dealer_idx = game_state["dealer_index"]
 
-    dealer = game_state["dealer_index"]
+    def next_active(start_idx):
+        n = len(players)
+        for offset in range(1, n + 1):
+            candidate = players[(start_idx + offset) % n]
+            if candidate in active_players:
+                return candidate
+        return None
 
-    # Heads up special case: dealer is small blind, other is big blind
+    # Heads-up: dealer is small blind, other player is big blind
     if len(active_players) == 2:
-        sb_player = players[dealer]
-        bb_player = players[(dealer + 1) % len(players)]
+        sb_player = players[dealer_idx]
+        # If the dealer has busted, the remaining active player covers both
+        if sb_player not in active_players:
+            sb_player = active_players[0]
+        bb_player = next((p for p in active_players if p != sb_player), None)
     else:
-        sb_player = players[(dealer + 1) % len(players)]
-        bb_player = players[(dealer + 2) % len(players)]
+        sb_player = next_active(dealer_idx)
+        bb_player = next_active(players.index(sb_player))
+
+    if not sb_player or not bb_player:
+        return  
 
     sb_amount = min(game_state["small_blind"], game_state["players"][sb_player]["chips"])
-    bb_amount = min(game_state["big_blind"], game_state["players"][bb_player]["chips"])
-    
-         
-    # Post blinds
+    bb_amount = min(game_state["big_blind"],   game_state["players"][bb_player]["chips"])
+
     for p, amount in [(sb_player, sb_amount), (bb_player, bb_amount)]:
         game_state["players"][p]["chips"] -= amount
-        game_state["players"][p]["bet"] += amount
-        game_state["pot"] += amount
+        game_state["players"][p]["bet"]   += amount
+        game_state["pot"]                 += amount
         game_state["stats"].record_action(p, "blind", "preflop")
         if game_state["players"][p]["chips"] == 0:
             game_state["players"][p]["all_in"] = True
-    # If small blind goes all-in and it's less than big blind, 
-    # we treat it as if they called the big blind for betting purposes (but only put in what they have)
+
     if sb_amount > bb_amount:
         excess = sb_amount - bb_amount
         game_state["players"][sb_player]["chips"] += excess
-        game_state["players"][sb_player]["bet"] -= excess
-        game_state["pot"] -= excess
-        if game_state["players"][sb_player]["all_in"]: # If they were marked all-in due to posting the small blind, but we had to reduce it to match the big blind, they are no longer all-in for betting purposes
+        game_state["players"][sb_player]["bet"]   -= excess
+        game_state["pot"]                         -= excess
+        if game_state["players"][sb_player]["all_in"]:
             game_state["players"][sb_player]["all_in"] = False
 
     game_state["current_bet"] = bb_amount
