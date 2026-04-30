@@ -200,47 +200,35 @@ def resolve_showdown(game_state):
     side_pots = game_state.get("side_pots", [])
     stats = game_state["stats"]
 
-    # Evaluate all hands once
     hand_strengths = evaluate_hands(game_state)
 
-    # Resolve each pot independently
-    for pot in side_pots:
-        eligible = [
-            p for p in pot["eligible"]
-            if not players[p]["folded"]
-        ]
-    shown = set()
-    
+    # Merge winnings per player across all pots before printing
+    total_won = {}
+    showdown_tracked = set()
+
     for pot in side_pots:
         eligible = [p for p in pot["eligible"] if not players[p]["folded"]]
-        best = max(hand_strengths[p] for p in eligible) if eligible else None
-        for p in eligible:
-            if p not in shown and best and hand_strengths[p] == best:
-                print(f"{p}'s hand: {players[p]['hand']}")
-                shown.add(p)
         if not eligible:
             continue
 
         best = max(hand_strengths[p] for p in eligible)
-        # Find all players who have this best hand
-        winners = [
-            p for p in eligible
-            if hand_strengths[p] == best
-        ]
-
+        winners = [p for p in eligible if hand_strengths[p] == best]
         split_amount = pot["amount"] // len(winners)
-        # Handle any rounding issues by giving leftover chips to earliest winner in order
+
         for w in winners:
             players[w]["chips"] += split_amount
             game_state["stats"].record_win(w, split_amount)
+            total_won[w] = total_won.get(w, 0) + split_amount
 
         for p in eligible:
-            won = p in winners
-            stats.record_showdown(p, won)
+            if p not in showdown_tracked:
+                stats.record_showdown(p, p in winners)
+                showdown_tracked.add(p)
 
-        pot_winners_str = ", ".join(winners)
-        print(f"Pot {pot['amount']} won by {pot_winners_str}")
-        
+    # Print once per winner with their total across all pots
+    for winner, amount in total_won.items():
+        print(f"\n{winner} wins {amount} chip(s).")
+        print(f"{winner}'s hand: {players[winner]['hand']}")        
 
 # Betting Logic
 def post_blinds(game_state):
@@ -259,10 +247,16 @@ def post_blinds(game_state):
                 return candidate
         return None
 
-    # Heads-up: dealer is small blind, other player is big blind
+    hand_number = game_state["hand_number"]
+
+    if hand_number > 0 and hand_number % 20 == 0:
+        game_state["small_blind"] *= 2
+        game_state["big_blind"] *= 2
+        print(f"[Hand {hand_number}] Blinds doubled!")
+
+    #Heads up logic 
     if len(active_players) == 2:
         sb_player = players[dealer_idx]
-        # If the dealer has busted, the remaining active player covers both
         if sb_player not in active_players:
             sb_player = active_players[0]
         bb_player = next((p for p in active_players if p != sb_player), None)
