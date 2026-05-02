@@ -23,7 +23,7 @@ class SimCache:
             self._store.pop(next(iter(self._store)))
         self._store[self._key(hero_hand, community)] = value
 # Global cache instance for equity simulations (shared across all bot instances in the process).
-equity_cache = SimCache(maxsize=1024)
+equity_cache = SimCache(maxsize=4096)
 
 # Convert hole cards to a key for pre-flop hand strength lookup
 def hand_key(hole_cards):

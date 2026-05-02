@@ -1,4 +1,5 @@
 import random
+#import time 
 from collections import Counter
 from constants import RANK_VALUES, SUITS, RANKS , STAGES
 from itertools import combinations
@@ -13,6 +14,7 @@ def shuffle_deck(game_state):
 
 #resets everything back to default
 def reset_round(game_state):
+
     shuffle_deck(game_state)
 
     game_state["stage"] = "preflop"
@@ -20,6 +22,7 @@ def reset_round(game_state):
     game_state["pot"] = 0
     game_state["current_bet"] = 0
     game_state["min_raise"] = game_state["big_blind"]
+
 
     for data in game_state["players"].values():
         data["hand"] = []
@@ -56,7 +59,7 @@ def deal_turnandriver(game_state):
 def advance_dealer(game_state):
     players = game_state["player_order"]
     num_players = len(players)
-    # Loop until we find a player with chips to be the next dealer
+
     while True:
         game_state["dealer_index"] = (game_state["dealer_index"] + 1) % num_players
         dealer = players[game_state["dealer_index"]]
@@ -200,35 +203,41 @@ def resolve_showdown(game_state):
     side_pots = game_state.get("side_pots", [])
     stats = game_state["stats"]
 
+    # Evaluate all hands once
     hand_strengths = evaluate_hands(game_state)
 
-    # Merge winnings per player across all pots before printing
-    total_won = {}
-    showdown_tracked = set()
-
+    # Resolve each pot independently
     for pot in side_pots:
-        eligible = [p for p in pot["eligible"] if not players[p]["folded"]]
+        eligible = [
+            p for p in pot["eligible"]
+            if not players[p]["folded"]
+        ]
+
         if not eligible:
             continue
 
         best = max(hand_strengths[p] for p in eligible)
-        winners = [p for p in eligible if hand_strengths[p] == best]
+
+        winners = [
+            p for p in eligible
+            if hand_strengths[p] == best
+        ]
+
         split_amount = pot["amount"] // len(winners)
 
         for w in winners:
             players[w]["chips"] += split_amount
             game_state["stats"].record_win(w, split_amount)
-            total_won[w] = total_won.get(w, 0) + split_amount
 
         for p in eligible:
-            if p not in showdown_tracked:
-                stats.record_showdown(p, p in winners)
-                showdown_tracked.add(p)
+            won = p in winners
+            stats.record_showdown(p, won)
 
-    # Print once per winner with their total across all pots
-    for winner, amount in total_won.items():
-        print(f"\n{winner} wins {amount} chip(s).")
-        print(f"{winner}'s hand: {players[winner]['hand']}")        
+        print(f"Pot {pot['amount']} won by {winners}")
+        for w in winners:
+            print(f"Player {w}'s hand: {players[w]['hand']}")
+
+        
 
 # Betting Logic
 def post_blinds(game_state):
@@ -237,43 +246,25 @@ def post_blinds(game_state):
         p for p in players if game_state["players"][p]["chips"] > 0
     ]
 
-    dealer_idx = game_state["dealer_index"]
+    dealer = game_state["dealer_index"]
 
-    def next_active(start_idx):
-        n = len(players)
-        for offset in range(1, n + 1):
-            candidate = players[(start_idx + offset) % n]
-            if candidate in active_players:
-                return candidate
-        return None
-
-    hand_number = game_state["hand_number"]
-
-    if hand_number > 0 and hand_number % 20 == 0:
-        game_state["small_blind"] *= 2
-        game_state["big_blind"] *= 2
-        print(f"[Hand {hand_number}] Blinds doubled!")
-
-    #Heads up logic 
+    # Heads up special case: dealer is small blind, other is big blind
     if len(active_players) == 2:
-        sb_player = players[dealer_idx]
-        if sb_player not in active_players:
-            sb_player = active_players[0]
-        bb_player = next((p for p in active_players if p != sb_player), None)
+        sb_player = players[dealer]
+        bb_player = players[(dealer + 1) % len(players)]
     else:
-        sb_player = next_active(dealer_idx)
-        bb_player = next_active(players.index(sb_player))
-
-    if not sb_player or not bb_player:
-        return  
+        sb_player = players[(dealer + 1) % len(players)]
+        bb_player = players[(dealer + 2) % len(players)]
 
     sb_amount = min(game_state["small_blind"], game_state["players"][sb_player]["chips"])
-    bb_amount = min(game_state["big_blind"],   game_state["players"][bb_player]["chips"])
-
+    bb_amount = min(game_state["big_blind"], game_state["players"][bb_player]["chips"])
+    
+         
+    # Post blinds
     for p, amount in [(sb_player, sb_amount), (bb_player, bb_amount)]:
         game_state["players"][p]["chips"] -= amount
-        game_state["players"][p]["bet"]   += amount
-        game_state["pot"]                 += amount
+        game_state["players"][p]["bet"] += amount
+        game_state["pot"] += amount
         game_state["stats"].record_action(p, "blind", "preflop")
         if game_state["players"][p]["chips"] == 0:
             game_state["players"][p]["all_in"] = True
@@ -281,8 +272,8 @@ def post_blinds(game_state):
     if sb_amount > bb_amount:
         excess = sb_amount - bb_amount
         game_state["players"][sb_player]["chips"] += excess
-        game_state["players"][sb_player]["bet"]   -= excess
-        game_state["pot"]                         -= excess
+        game_state["players"][sb_player]["bet"] -= excess
+        game_state["pot"] -= excess
         if game_state["players"][sb_player]["all_in"]:
             game_state["players"][sb_player]["all_in"] = False
 
@@ -298,26 +289,27 @@ def reset_bets(game_state):
         # Carry forward what was bet this street into the running total
         player["total_contributed"] = player.get("total_contributed", 0) + player["bet"]
         player["bet"] = 0
- 
+
 def check_fold_win(game_state):
     active_players = [
         p for p, data in game_state["players"].items()
         if not data["folded"]
     ]
-    # If only one player remains, they win the pot immediately without needing to showdown
+
     if len(active_players) == 1:
         winner = active_players[0]
-        pot = game_state["pot"]
+        # Collect any bets sitting on the table that haven't been merged into pot yet
+        extra = sum(data["bet"] for data in game_state["players"].values())
+        pot = game_state["pot"] + extra
         game_state["players"][winner]["chips"] += pot
         print(f"\n{winner} wins the pot ({pot}) by everyone folding.")
         print(f"{winner}'s hand: {game_state['players'][winner]['hand']}")
         game_state["pot"] = 0
+        cleanup_after_hand(game_state)
         return winner, pot
 
     return None, 0
-# When players go all-in with different amounts, we need to create side pots to handle 
-# the fact that not everyone is contesting the full pot. 
-# This function builds those side pots based on the total contributions of each player.
+
 def build_side_pots(game_state):
     players = game_state["players"]
 
@@ -354,10 +346,7 @@ def build_side_pots(game_state):
             del contributions[p]
 
     game_state["side_pots"] = side_pots
-# In an all-in scenario where one or more players are all-in and cannot take further actions,
-# we need to check if the remaining active players are either all-in or folded. 
-# If so, we can skip straight to running out the rest of the cards and resolving the showdown
-# without further betting rounds.
+
 def all_players_all_in_or_folded(game_state):
     active = [
         p for p, d in game_state["players"].items()
@@ -371,8 +360,7 @@ def all_players_all_in_or_folded(game_state):
 
     return len(not_all_in) <= 1
 
-# If we hit an all-in situation where betting is effectively over, 
-# run out the rest of the cards and resolve showdown immediately
+# If we hit an all-in situation where betting is effectively over, run out the rest of the cards and resolve showdown immediately
 def runout_and_showdown(game_state):
     current_index = STAGES.index(game_state["stage"])
     remaining = STAGES[current_index + 1:]
@@ -393,14 +381,15 @@ def runout_and_showdown(game_state):
     resolve_showdown(game_state)
 
     cleanup_after_hand(game_state)
+
 # After a hand is fully resolved, reset pot and bets but keep chips and stats intact for next hand
 def cleanup_after_hand(game_state):
     game_state["pot"] = 0
     for p in game_state["players"]:
         game_state["players"][p]["bet"] = 0
+        game_state["players"][p]["total_contributed"] = 0
 
 def play_round(game_state):
-
     game_state["stats"].record_new_hand()
 
     deal_cards(game_state)
@@ -409,7 +398,7 @@ def play_round(game_state):
     #preflop
     result = betting_phase(game_state)
     if result == "fold_win":
-        return  # fold win
+        return  # fold win — cleanup already called inside check_fold_win
     if result == "all_in_runout":
         runout_and_showdown(game_state)
         return
@@ -448,8 +437,6 @@ def play_round(game_state):
 
     cleanup_after_hand(game_state)
 
-# The main betting loop for a given stage. If reset is True, it will reset bets at the start of the round 
-# (used for post-blind preflop and for each new street).
 def betting(game_state, reset=True):
     if reset:
         reset_bets(game_state)
@@ -458,12 +445,11 @@ def betting(game_state, reset=True):
     if winner:
         return winner
 
-
 def betting_phase(game_state):
     print("\n--- Betting Phase ---")
 
     stats = game_state["stats"]
-    # For preflop, we need to track the big blind player and the last raiser to determine when the betting round is complete.
+
     if game_state["stage"] == "preflop":
         players = game_state["player_order"]
         dealer = game_state["dealer_index"]
@@ -483,8 +469,6 @@ def betting_phase(game_state):
         last_raiser = None
         bb_option_player = None
 
-# The betting round continues until all active players have either folded, called the current bet,
-# or are all-in, and there are no outstanding raises that would require further action.
     while True:
         action_order = get_action_order(game_state, game_state["stage"])
         acted_this_pass = False
@@ -502,8 +486,7 @@ def betting_phase(game_state):
 
             to_call = max(0, game_state["current_bet"] - data["bet"])
             chips = data["chips"]
-            
-            # If the player is a human, print out the game state for them to make an informed decision
+
             is_human = getattr(game_state["players"][player]["strategy"], "__name__", "") == "human_strategy"
             if game_state.get("verbose", True) and is_human:
                 print(f"\n{player}'s turn")
@@ -637,12 +620,12 @@ def betting_phase(game_state):
                     data["all_in"] = True
                     print(f"{player} goes all-in.")
 
-        active_players = [ 
+        active_players = [
             p for p in game_state["players"]
             if not game_state["players"][p]["folded"]
         ]
 
-        active_not_allin = [ 
+        active_not_allin = [
             p for p in active_players
             if not game_state["players"][p]["all_in"]
         ]
@@ -650,13 +633,11 @@ def betting_phase(game_state):
         if len(active_not_allin) <= 1:
             return "all_in_runout"
 
-        # Check if all active players have acted and their bets are equal (or they are all-in). If so, the betting round is complete.
         bets_equal = all(
             game_state["players"][p]["bet"] == game_state["current_bet"]
             for p in active_not_allin
         )
 
-        # If all active players have acted and their bets are equal (or they are all-in), the betting round is complete.
         if bets_equal and all(p in players_acted for p in active_not_allin):
              if bb_option_player and bb_option_player not in players_acted and bb_option_player in active_not_allin:
                  pass
